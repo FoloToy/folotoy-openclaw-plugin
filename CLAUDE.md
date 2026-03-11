@@ -92,42 +92,30 @@ MQTT password: {toy_key}
 ### 玩具 → 插件（上行）
 
 ```json
-{"text": "hello"}
+{
+  "msgId": 1,
+  "identifier": "chat_input",
+  "outParams": {
+    "text": "hello"
+  }
+}
 ```
 
 ### 插件 → 玩具（下行）
 
-兼容 OpenAI Chat Completion 流式格式，每条 MQTT 消息对应一个 chunk：
+非流式，单条回复，`outParams` 参考 OpenAI 非流式响应结构：
 
 ```json
 {
-  "id": "chatcmpl-xxx",
-  "object": "chat.completion.chunk",
-  "created": 1741234567,
-  "model": "...",
-  "choices": [
-    {
-      "index": 0,
-      "delta": {"content": "Hello"},
-      "finish_reason": null
-    }
-  ]
+  "msgId": 1,
+  "identifier": "chat_output",
+  "outParams": {
+    "content": "hello"
+  }
 }
 ```
 
-流结束时依次发送两条消息：
-
-1. 最后一个 chunk，`finish_reason` 为 `"stop"`：
-
-```json
-{"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
-```
-
-2. 终止标记：
-
-```json
-[DONE]
-```
+`msgId` 与上行消息对应，用于关联请求和响应。
 
 ## Tech Stack
 

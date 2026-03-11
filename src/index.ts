@@ -57,7 +57,7 @@ export default (api: any) => {
 
       const credentials = await resolveCredentials(mqttConfig)
       const client = await createMqttClient(mqttConfig, credentials)
-      const channel = new FoloToyChannel(client, credentials, sendToOpenClaw)
+      const channel = new FoloToyChannel(client, credentials, (_msgId, text) => sendToOpenClaw(text))
       channel.subscribe()
       return channel
     },

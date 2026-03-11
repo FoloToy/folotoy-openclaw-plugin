@@ -2,31 +2,31 @@ import { MqttClient } from 'mqtt'
 import { MqttCredentials, buildTopic } from './mqtt.js'
 
 type InboundMessage = {
-  text: string
+  msgId: number
+  identifier: 'chat_input'
+  outParams: {
+    text: string
+  }
 }
 
-type OutboundChunk = {
-  id: string
-  object: 'chat.completion.chunk'
-  created: number
-  model: string
-  choices: Array<{
-    index: number
-    delta: { content?: string }
-    finish_reason: string | null
-  }>
+type OutboundMessage = {
+  msgId: number
+  identifier: 'chat_output'
+  outParams: {
+    content: string
+  }
 }
 
 export class FoloToyChannel {
   private client: MqttClient
   private credentials: MqttCredentials
   private topic: string
-  private onMessage: (text: string) => void
+  private onMessage: (msgId: number, text: string) => void
 
   constructor(
     client: MqttClient,
     credentials: MqttCredentials,
-    onMessage: (text: string) => void,
+    onMessage: (msgId: number, text: string) => void,
   ) {
     this.client = client
     this.credentials = credentials
@@ -43,8 +43,8 @@ export class FoloToyChannel {
       if (topic !== this.topic) return
       try {
         const msg = JSON.parse(payload.toString()) as InboundMessage
-        if (typeof msg.text === 'string') {
-          this.onMessage(msg.text)
+        if (msg.identifier === 'chat_input' && typeof msg.outParams?.text === 'string') {
+          this.onMessage(msg.msgId, msg.outParams.text)
         }
       } catch {
         // ignore malformed messages
@@ -52,26 +52,12 @@ export class FoloToyChannel {
     })
   }
 
-  sendChunk(content: string, id: string, model: string): void {
-    const chunk: OutboundChunk = {
-      id,
-      object: 'chat.completion.chunk',
-      created: Math.floor(Date.now() / 1000),
-      model,
-      choices: [{ index: 0, delta: { content }, finish_reason: null }],
+  sendResponse(msgId: number, content: string): void {
+    const message: OutboundMessage = {
+      msgId,
+      identifier: 'chat_output',
+      outParams: { content },
     }
-    this.client.publish(this.topic, JSON.stringify(chunk))
-  }
-
-  sendDone(id: string, model: string): void {
-    const stopChunk: OutboundChunk = {
-      id,
-      object: 'chat.completion.chunk',
-      created: Math.floor(Date.now() / 1000),
-      model,
-      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-    }
-    this.client.publish(this.topic, JSON.stringify(stopChunk))
-    this.client.publish(this.topic, '[DONE]')
+    this.client.publish(this.topic, JSON.stringify(message))
   }
 }
