@@ -44,9 +44,9 @@ FoloToy 玩具  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Thi
 
 ## Authentication
 
-支持两种认证流程，**默认使用 Flow 1**：
+支持两种认证流程，**默认使用 Flow 2**：
 
-### Flow 1: HTTP API 登录（默认）
+### Flow 1: HTTP API 登录
 
 **Step 1**: 用 API Key 换取 MQTT 凭证
 
@@ -70,7 +70,7 @@ MQTT username: openapi:{username}
 MQTT password: {password}
 ```
 
-### Flow 2: 直接配置 SN + Key
+### Flow 2: 直接配置 SN + Key（默认）
 1. 直接配置玩具 SN 和 key（无需调用 HTTP API）
 2. 插件连接 MQTT Broker，username 加 `openapi:` 前缀：
 
@@ -84,7 +84,7 @@ MQTT password: {toy_key}
 上行和下行使用同一个 topic：
 
 ```
-/open/folotoy/{sn}/thing/data/post
+/openapi/folotoy/{sn}/thing/data/post
 ```
 
 ## Message Formats

@@ -33,7 +33,7 @@ export default (api: any) => {
               required: ['flow', 'toy_sn', 'toy_key'],
             },
           ],
-          default: { flow: 'api' },
+          default: { flow: 'direct' },
         },
         mqtt: {
           type: 'object',

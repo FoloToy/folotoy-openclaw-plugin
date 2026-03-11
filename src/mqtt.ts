@@ -45,7 +45,7 @@ export async function resolveCredentials(config: PluginConfig): Promise<MqttCred
 }
 
 export function buildTopic(toy_sn: string): string {
-  return `/open/folotoy/${toy_sn}/thing/data/post`
+  return `/openapi/folotoy/${toy_sn}/thing/data/post`
 }
 
 export async function createMqttClient(config: PluginConfig, credentials: MqttCredentials): Promise<MqttClient> {
