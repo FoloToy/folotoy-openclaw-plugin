@@ -2,20 +2,47 @@
   "name": "@folotoy/folotoy-openclaw-plugin",
   "version": "0.1.0",
   "type": "module",
-  "openclaw.extensions": [
-    "src/index.ts"
+  "description": "OpenClaw channel plugin for FoloToy smart toys via MQTT",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "openclaw.plugin.json"
   ],
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "channel": {
+      "id": "folotoy",
+      "label": "FoloToy",
+      "selectionLabel": "FoloToy",
+      "docsPath": "/channels/folotoy",
+      "blurb": "Connect FoloToy smart toys via MQTT."
+    }
+  },
   "scripts": {
     "build": "tsc",
-    "test": "vitest"
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
-    "mqtt": "^5.10.1",
-    "openclaw": "^2026.3.8"
+    "mqtt": "^5.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "openclaw": "^2026.3.8",
     "typescript": "^5.7.3",
     "vitest": "^3.0.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
