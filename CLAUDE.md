@@ -115,7 +115,7 @@ MQTT password: {toy_key}
 }
 ```
 
-`msgId` 与上行消息对应，用于关联请求和响应。
+`msgId` 每个会话从 1 开始自增，用于关联请求和响应。
 
 ## Tech Stack
 

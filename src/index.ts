@@ -1,10 +1,8 @@
 import type { OpenClawPluginApi, ChannelPlugin } from 'openclaw/plugin-sdk/core'
 import { resolveCredentials, createMqttClient, buildTopic } from './mqtt.js'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from './config.js'
-import type { PluginConfig } from './config.js'
+import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, flatToPluginConfig } from './config.js'
+import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
-
-type FoloToyAccount = PluginConfig
 
 type InboundMessage = {
   msgId: number
@@ -18,17 +16,17 @@ type OutboundMessage = {
   outParams: { content: string }
 }
 
-// Per-account MQTT clients, kept for proactive outbound sends
-const activeClients = new Map<string, { client: MqttClient; toy_sn: string }>()
+// Per-account MQTT clients and msgId counters
+const activeClients = new Map<string, { client: MqttClient; toy_sn: string; nextMsgId: number }>()
 
-const folotoyChannel: ChannelPlugin<FoloToyAccount> = {
+const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
   id: 'folotoy',
   meta: {
     id: 'folotoy',
     label: 'FoloToy',
     selectionLabel: 'FoloToy',
     docsPath: '/channels/folotoy',
-    blurb: 'Connect FoloToy smart toys via MQTT.',
+    blurb: 'Empower your FoloToy with OpenClaw AI capabilities.',
   },
   capabilities: {
     chatTypes: ['direct'],
@@ -37,59 +35,35 @@ const folotoyChannel: ChannelPlugin<FoloToyAccount> = {
     schema: {
       type: 'object',
       properties: {
-        auth: {
-          type: 'object',
-          oneOf: [
-            {
-              title: 'Flow 2: SN + Key (Default)',
-              properties: {
-                flow: { type: 'string', const: 'direct' },
-                toy_sn: { type: 'string' },
-                toy_key: { type: 'string' },
-              },
-              required: ['flow', 'toy_sn', 'toy_key'],
-            },
-            {
-              title: 'Flow 1: HTTP API Login',
-              properties: {
-                flow: { type: 'string', const: 'api' },
-                api_url: { type: 'string' },
-                api_key: { type: 'string' },
-                toy_sn: { type: 'string' },
-              },
-              required: ['flow', 'api_url', 'api_key', 'toy_sn'],
-            },
-          ],
-          default: { flow: 'direct' },
-        },
-        mqtt: {
-          type: 'object',
-          properties: {
-            host: { type: 'string', default: DEFAULT_MQTT_HOST },
-            port: { type: 'number', default: DEFAULT_MQTT_PORT },
-          },
-        },
+        flow: { type: 'string', enum: ['direct', 'api'], default: 'direct' },
+        toy_sn: { type: 'string' },
+        toy_key: { type: 'string' },
+        api_url: { type: 'string', default: 'https://api.folotoy.cn' },
+        api_key: { type: 'string' },
+        mqtt_host: { type: 'string', default: DEFAULT_MQTT_HOST },
+        mqtt_port: { type: 'number', default: DEFAULT_MQTT_PORT },
       },
     },
     uiHints: {
-      'auth.toy_sn': { label: 'Toy SN' },
-      'auth.toy_key': { label: 'Toy Key', sensitive: true },
-      'auth.api_url': { label: 'API URL', placeholder: 'https://api.folotoy.com' },
-      'auth.api_key': { label: 'API Key', sensitive: true },
-      'mqtt.host': { label: 'MQTT Host', placeholder: DEFAULT_MQTT_HOST },
-      'mqtt.port': { label: 'MQTT Port' },
+      flow: { label: 'Auth Flow' },
+      toy_sn: { label: 'Toy SN' },
+      toy_key: { label: 'Toy Key', sensitive: true },
+      api_url: { label: 'API URL', placeholder: 'https://api.folotoy.com' },
+      api_key: { label: 'API Key', sensitive: true },
+      mqtt_host: { label: 'MQTT Host', placeholder: DEFAULT_MQTT_HOST },
+      mqtt_port: { label: 'MQTT Port' },
     },
   },
   config: {
     listAccountIds: (cfg) => {
-      const accounts = (cfg as Record<string, unknown> & { channels?: { folotoy?: { accounts?: Record<string, unknown> } } })
-        .channels?.folotoy?.accounts ?? {}
-      return Object.keys(accounts)
+      const folotoy = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
+        .channels?.folotoy
+      return folotoy ? ['default'] : []
     },
-    resolveAccount: (cfg, accountId) => {
-      const accounts = (cfg as Record<string, unknown> & { channels?: { folotoy?: { accounts?: Record<string, FoloToyAccount> } } })
-        .channels?.folotoy?.accounts ?? {}
-      return accounts[accountId ?? 'default'] ?? ({} as FoloToyAccount)
+    resolveAccount: (cfg, _accountId) => {
+      const folotoy = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
+        .channels?.folotoy
+      return folotoy ?? ({} as FlatChannelConfig)
     },
   },
   gateway: {
@@ -101,19 +75,17 @@ const folotoyChannel: ChannelPlugin<FoloToyAccount> = {
         return
       }
 
-      const mqttConfig: PluginConfig = {
-        auth: account.auth,
-        mqtt: {
-          host: account.mqtt?.host ?? DEFAULT_MQTT_HOST,
-          port: account.mqtt?.port ?? DEFAULT_MQTT_PORT,
-        },
+      if (!account.toy_sn) {
+        log?.warn?.('toy_sn not configured — skipping MQTT connection')
+        return
       }
 
+      const mqttConfig = flatToPluginConfig(account)
       const credentials = await resolveCredentials(mqttConfig)
       const client = await createMqttClient(mqttConfig, credentials)
       const topic = buildTopic(credentials.toy_sn)
 
-      activeClients.set(accountId, { client, toy_sn: credentials.toy_sn })
+      activeClients.set(accountId, { client, toy_sn: credentials.toy_sn, nextMsgId: 1 })
       log?.info?.(`Connected to MQTT broker, subscribed to ${topic}`)
 
       client.subscribe(topic, (err) => {
@@ -159,10 +131,14 @@ const folotoyChannel: ChannelPlugin<FoloToyAccount> = {
         })
       })
 
-      abortSignal.addEventListener('abort', () => {
-        activeClients.delete(accountId)
-        client.end()
-        log?.info?.('MQTT client disconnected')
+      // Keep the account alive until aborted
+      return new Promise<void>((resolve) => {
+        abortSignal.addEventListener('abort', () => {
+          activeClients.delete(accountId)
+          client.end()
+          log?.info?.('MQTT client disconnected')
+          resolve()
+        })
       })
     },
 
@@ -179,7 +155,7 @@ const folotoyChannel: ChannelPlugin<FoloToyAccount> = {
       if (!entry) throw new Error(`No active MQTT client for account "${key}"`)
 
       const topic = buildTopic(entry.toy_sn)
-      const msgId = Date.now()
+      const msgId = entry.nextMsgId++
       const outMsg: OutboundMessage = {
         msgId,
         identifier: 'chat_output',

@@ -1,7 +1,7 @@
 {
   "name": "@folotoy/folotoy-openclaw-plugin",
   "version": "0.1.0",
-  "description": "OpenClaw channel plugin for FoloToy smart toys via MQTT",
+  "description": "Empower your FoloToy with OpenClaw AI capabilities.",
   "keywords": [
     "folotoy",
     "openclaw"
@@ -55,7 +55,7 @@
       "label": "FoloToy",
       "selectionLabel": "FoloToy",
       "docsPath": "/channels/folotoy",
-      "blurb": "Connect FoloToy smart toys via MQTT."
+      "blurb": "Empower your FoloToy with OpenClaw AI capabilities."
     }
   }
 }
