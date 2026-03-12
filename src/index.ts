@@ -70,7 +70,6 @@ const folotoyChannel: ChannelPlugin<FoloToyAccount> = {
           },
         },
       },
-      required: ['auth'],
     },
     uiHints: {
       'auth.toy_sn': { label: 'Toy SN' },
