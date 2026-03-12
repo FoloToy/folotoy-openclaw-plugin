@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { EventEmitter } from 'events'
-import { buildTopic } from '../mqtt.js'
+import { buildInboundTopic, buildOutboundTopic } from '../mqtt.js'
 
 // Replicate the message parsing logic from index.ts for unit testing
 type InboundMessage = {
@@ -24,7 +24,7 @@ function makeMockClient() {
 }
 
 function setupSubscriber(client: ReturnType<typeof makeMockClient>, toy_sn: string, onMessage: (msgId: number, text: string) => void) {
-  const topic = buildTopic(toy_sn)
+  const topic = buildInboundTopic(toy_sn)
   client.subscribe(topic, () => {})
   client.on('message', (_topic: string, payload: Buffer) => {
     if (_topic !== topic) return
@@ -40,7 +40,7 @@ function setupSubscriber(client: ReturnType<typeof makeMockClient>, toy_sn: stri
 
 describe('inbound message parsing', () => {
   const toy_sn = 'SN001'
-  const topic = buildTopic(toy_sn)
+  const inboundTopic = buildInboundTopic(toy_sn)
 
   it('calls onMessage with msgId and text on valid chat_input', () => {
     const client = makeMockClient()
@@ -48,7 +48,7 @@ describe('inbound message parsing', () => {
     setupSubscriber(client, toy_sn, onMessage)
 
     const msg: InboundMessage = { msgId: 42, identifier: 'chat_input', outParams: { text: 'hello' } }
-    client.emit('message', topic, Buffer.from(JSON.stringify(msg)))
+    client.emit('message', inboundTopic, Buffer.from(JSON.stringify(msg)))
 
     expect(onMessage).toHaveBeenCalledWith(42, 'hello')
   })
@@ -59,7 +59,7 @@ describe('inbound message parsing', () => {
     setupSubscriber(client, toy_sn, onMessage)
 
     const msg: InboundMessage = { msgId: 1, identifier: 'chat_input', outParams: { text: 'hi' } }
-    client.emit('message', '/openapi/folotoy/OTHER/thing/data/post', Buffer.from(JSON.stringify(msg)))
+    client.emit('message', '/openapi/folotoy/OTHER/thing/command/call', Buffer.from(JSON.stringify(msg)))
 
     expect(onMessage).not.toHaveBeenCalled()
   })
@@ -69,7 +69,7 @@ describe('inbound message parsing', () => {
     const onMessage = vi.fn()
     setupSubscriber(client, toy_sn, onMessage)
 
-    client.emit('message', topic, Buffer.from(JSON.stringify({ msgId: 1, identifier: 'other', outParams: { text: 'hi' } })))
+    client.emit('message', inboundTopic, Buffer.from(JSON.stringify({ msgId: 1, identifier: 'other', outParams: { text: 'hi' } })))
 
     expect(onMessage).not.toHaveBeenCalled()
   })
@@ -79,7 +79,7 @@ describe('inbound message parsing', () => {
     const onMessage = vi.fn()
     setupSubscriber(client, toy_sn, onMessage)
 
-    client.emit('message', topic, Buffer.from('not json'))
+    client.emit('message', inboundTopic, Buffer.from('not json'))
 
     expect(onMessage).not.toHaveBeenCalled()
   })
@@ -87,7 +87,7 @@ describe('inbound message parsing', () => {
 
 describe('outbound message format', () => {
   const toy_sn = 'SN001'
-  const topic = buildTopic(toy_sn)
+  const outboundTopic = buildOutboundTopic(toy_sn)
 
   it('publishes chat_output with correct msgId and content', () => {
     const client = makeMockClient()
@@ -98,11 +98,11 @@ describe('outbound message format', () => {
       identifier: 'chat_output',
       outParams: { content },
     }
-    client.publish(topic, JSON.stringify(outMsg))
+    client.publish(outboundTopic, JSON.stringify(outMsg))
 
     expect(client.publish).toHaveBeenCalledOnce()
     const [t, payload] = client.publish.mock.calls[0] as [string, string]
-    expect(t).toBe(topic)
+    expect(t).toBe(outboundTopic)
     expect(JSON.parse(payload)).toEqual({ msgId: 42, identifier: 'chat_output', outParams: { content: 'world' } })
   })
 })

@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi, ChannelPlugin } from 'openclaw/plugin-sdk/core'
-import { resolveCredentials, createMqttClient, buildTopic } from './mqtt.js'
+import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic } from './mqtt.js'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
@@ -83,12 +83,13 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const mqttConfig = flatToPluginConfig(account)
       const credentials = await resolveCredentials(mqttConfig)
       const client = await createMqttClient(mqttConfig, credentials)
-      const topic = buildTopic(credentials.toy_sn)
+      const inboundTopic = buildInboundTopic(credentials.toy_sn)
+      const outboundTopic = buildOutboundTopic(credentials.toy_sn)
 
       activeClients.set(accountId, { client, toy_sn: credentials.toy_sn, nextMsgId: 1 })
-      log?.info?.(`Connected to MQTT broker, subscribed to ${topic}`)
+      log?.info?.(`Connected to MQTT broker, subscribed to ${inboundTopic}`)
 
-      client.subscribe(topic, (err) => {
+      client.subscribe(inboundTopic, (err) => {
         if (err) log?.error?.(`Failed to subscribe: ${err.message}`)
       })
 
@@ -124,7 +125,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
                 identifier: 'chat_output',
                 outParams: { content: replyPayload.text },
               }
-              client.publish(topic, JSON.stringify(outMsg))
+              client.publish(outboundTopic, JSON.stringify(outMsg))
             },
             onError: (err) => log?.error?.(`Dispatch error: ${String(err)}`),
           },
@@ -154,14 +155,14 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const entry = activeClients.get(key)
       if (!entry) throw new Error(`No active MQTT client for account "${key}"`)
 
-      const topic = buildTopic(entry.toy_sn)
+      const outboundTopic = buildOutboundTopic(entry.toy_sn)
       const msgId = entry.nextMsgId++
       const outMsg: OutboundMessage = {
         msgId,
         identifier: 'chat_output',
         outParams: { content: text },
       }
-      entry.client.publish(topic, JSON.stringify(outMsg))
+      entry.client.publish(outboundTopic, JSON.stringify(outMsg))
       return { channel: 'folotoy', messageId: String(msgId) }
     },
   },

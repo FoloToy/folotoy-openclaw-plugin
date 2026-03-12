@@ -81,10 +81,11 @@ MQTT password: {toy_key}
 
 ## MQTT Topics
 
-上行和下行使用同一个 topic：
+上行和下行使用不同的 topic：
 
 ```
-/openapi/folotoy/{sn}/thing/data/post
+上行（Toy → Plugin）: /openapi/folotoy/{sn}/thing/command/call
+下行（Plugin → Toy）: /openapi/folotoy/{sn}/thing/command/callAck
 ```
 
 ## Message Formats

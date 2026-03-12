@@ -44,8 +44,12 @@ export async function resolveCredentials(config: PluginConfig): Promise<MqttCred
   return directCredentials(config.auth)
 }
 
-export function buildTopic(toy_sn: string): string {
-  return `/openapi/folotoy/${toy_sn}/thing/data/post`
+export function buildInboundTopic(toy_sn: string): string {
+  return `/openapi/folotoy/${toy_sn}/thing/command/call`
+}
+
+export function buildOutboundTopic(toy_sn: string): string {
+  return `/openapi/folotoy/${toy_sn}/thing/command/callAck`
 }
 
 export async function createMqttClient(config: PluginConfig, credentials: MqttCredentials): Promise<MqttClient> {

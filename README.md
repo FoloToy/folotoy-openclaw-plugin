@@ -64,10 +64,11 @@ Example `openclaw.json`:
 
 ## MQTT
 
-Both inbound and outbound messages use the same topic:
+Inbound and outbound use separate topics:
 
 ```
-/openapi/folotoy/{sn}/thing/data/post
+Inbound  (Toy → Plugin):  /openapi/folotoy/{sn}/thing/command/call
+Outbound (Plugin → Toy):  /openapi/folotoy/{sn}/thing/command/callAck
 ```
 
 The plugin connects with an `openapi:` prefix on the username to distinguish itself from the toy's own connection:
