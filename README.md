@@ -1,9 +1,11 @@
 # @folotoy/folotoy-openclaw-plugin
 
-FoloToy channel plugin for [OpenClaw](https://openclaw.ai). Bridges FoloToy smart toys with OpenClaw via MQTT, allowing users to interact with OpenClaw through their FoloToy devices.
+Empower your FoloToy with OpenClaw AI capabilities.
+
+An [OpenClaw](https://openclaw.ai) channel plugin that bridges FoloToy smart toys with OpenClaw via MQTT.
 
 ```
-FoloToy 玩具  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  This Plugin  <──>  OpenClaw
+FoloToy Toy  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Plugin  <──>  OpenClaw
 ```
 
 ## Installation
@@ -12,7 +14,7 @@ FoloToy 玩具  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Thi
 openclaw plugins install @folotoy/folotoy-openclaw-plugin
 ```
 
-Or install locally for development:
+For local development:
 
 ```bash
 openclaw plugins install -l .
@@ -20,19 +22,17 @@ openclaw plugins install -l .
 
 ## Configuration
 
-The plugin supports two authentication flows.
+The plugin supports two authentication flows. All fields are configured as flat key-value pairs in `openclaw.json` under `channels.folotoy`.
 
 ### Flow 2: Direct SN + Key (Default)
 
-Configure your toy SN and key directly:
-
 | Field | Description |
 |-------|-------------|
-| `auth.flow` | `"direct"` |
-| `auth.toy_sn` | Toy serial number |
-| `auth.toy_key` | Toy key (used as MQTT password) |
-| `mqtt.host` | MQTT broker host (default: `192.168.10.138`) |
-| `mqtt.port` | MQTT broker port (default: `1883`) |
+| `flow` | `"direct"` |
+| `toy_sn` | Toy serial number |
+| `toy_key` | Toy key (used as MQTT password) |
+| `mqtt_host` | MQTT broker host (default: `198.19.249.25`) |
+| `mqtt_port` | MQTT broker port (default: `1883`) |
 
 ### Flow 1: HTTP API Login
 
@@ -40,12 +40,27 @@ Exchange an API key for MQTT credentials via the FoloToy API:
 
 | Field | Description |
 |-------|-------------|
-| `auth.flow` | `"api"` |
-| `auth.api_url` | FoloToy API base URL, e.g. `https://api.folotoy.com` |
-| `auth.api_key` | Bearer token |
-| `auth.toy_sn` | Toy serial number |
-| `mqtt.host` | MQTT broker host |
-| `mqtt.port` | MQTT broker port (default: `1883`) |
+| `flow` | `"api"` |
+| `toy_sn` | Toy serial number |
+| `api_url` | FoloToy API base URL (default: `https://api.folotoy.cn`) |
+| `api_key` | Bearer token |
+| `mqtt_host` | MQTT broker host |
+| `mqtt_port` | MQTT broker port (default: `1883`) |
+
+Example `openclaw.json`:
+
+```json
+{
+  "channels": {
+    "folotoy": {
+      "flow": "direct",
+      "toy_sn": "your-toy-sn",
+      "toy_key": "your-toy-key",
+      "mqtt_host": "198.19.249.25"
+    }
+  }
+}
+```
 
 ## MQTT
 
@@ -55,7 +70,7 @@ Both inbound and outbound messages use the same topic:
 /openapi/folotoy/{sn}/thing/data/post
 ```
 
-The plugin connects to the MQTT broker with an `openapi:` prefix on the username to distinguish itself from the toy's own connection:
+The plugin connects with an `openapi:` prefix on the username to distinguish itself from the toy's own connection:
 
 ```
 username: openapi:{toy_sn}
@@ -78,8 +93,6 @@ password: {toy_key}
 
 **Plugin → Toy (outbound)**
 
-Single response message with `msgId` matching the inbound request:
-
 ```json
 {
   "msgId": 1,
@@ -90,20 +103,26 @@ Single response message with `msgId` matching the inbound request:
 }
 ```
 
+`msgId` starts at 1 per session and auto-increments.
+
 ## Environments
 
 | Environment | MQTT Host | Port |
 |-------------|-----------|------|
-| Development | `192.168.10.138` | 1883 |
+| Development | `198.19.249.25` | 1883 |
 | Testing | `f.qrc92.cn` | 1883 |
 | Production | `f.folotoy.cn` | 1883 |
 
-Switch environments via the `FOLOTOY_MQTT_HOST` environment variable.
+Switch environments via the `FOLOTOY_MQTT_HOST` environment variable or `mqtt_host` config field.
 
 ## Development
 
 ```bash
 npm install
-npm run build
 npm test
+npm run build
 ```
+
+## License
+
+MIT
