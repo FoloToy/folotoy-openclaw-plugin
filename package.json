@@ -1,30 +1,31 @@
 {
   "name": "@folotoy/folotoy-openclaw-plugin",
   "version": "0.1.0",
-  "type": "module",
   "description": "OpenClaw channel plugin for FoloToy smart toys via MQTT",
+  "keywords": [
+    "folotoy",
+    "openclaw"
+  ],
+  "homepage": "https://github.com/FoloToy/folotoy-openclaw-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/FoloToy/folotoy-openclaw-plugin/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FoloToy/folotoy-openclaw-plugin.git"
+  },
   "license": "MIT",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "author": "Larry Wang",
+  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "files": [
     "src",
     "openclaw.plugin.json"
   ],
-  "openclaw": {
-    "extensions": [
-      "./src/index.ts"
-    ],
-    "channel": {
-      "id": "folotoy",
-      "label": "FoloToy",
-      "selectionLabel": "FoloToy",
-      "docsPath": "/channels/folotoy",
-      "blurb": "Connect FoloToy smart toys via MQTT."
-    }
-  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -44,5 +45,17 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "channel": {
+      "id": "folotoy",
+      "label": "FoloToy",
+      "selectionLabel": "FoloToy",
+      "docsPath": "/channels/folotoy",
+      "blurb": "Connect FoloToy smart toys via MQTT."
+    }
   }
 }

@@ -1,5 +1,64 @@
 {
   "id": "folotoy",
-  "type": "channel",
-  "channels": ["folotoy"]
+  "name": "FoloToy",
+  "description": "OpenClaw channel plugin for FoloToy smart toys via MQTT",
+  "version": "0.1.0",
+  "channels": ["folotoy"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "auth": {
+        "type": "object",
+        "description": "Authentication configuration",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "enum": ["direct", "api"],
+            "description": "Authentication flow: 'direct' (SN + Key) or 'api' (HTTP API login)"
+          },
+          "toy_sn": {
+            "type": "string",
+            "description": "Toy serial number"
+          },
+          "toy_key": {
+            "type": "string",
+            "description": "Toy key (used as MQTT password in Flow 2)"
+          },
+          "api_url": {
+            "type": "string",
+            "description": "FoloToy API base URL (Flow 1 only)"
+          },
+          "api_key": {
+            "type": "string",
+            "description": "FoloToy API key / Bearer token (Flow 1 only)"
+          }
+        },
+        "required": ["flow", "toy_sn"]
+      },
+      "mqtt": {
+        "type": "object",
+        "description": "MQTT broker connection",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "MQTT broker host"
+          },
+          "port": {
+            "type": "number",
+            "description": "MQTT broker port"
+          }
+        }
+      }
+    },
+    "required": ["auth"]
+  },
+  "uiHints": {
+    "auth.toy_sn": { "label": "Toy SN" },
+    "auth.toy_key": { "label": "Toy Key", "sensitive": true },
+    "auth.api_url": { "label": "API URL", "placeholder": "https://api.folotoy.com" },
+    "auth.api_key": { "label": "API Key", "sensitive": true },
+    "mqtt.host": { "label": "MQTT Host", "placeholder": "198.19.249.25" },
+    "mqtt.port": { "label": "MQTT Port" }
+  }
 }
