@@ -31,7 +31,7 @@ export type FlatChannelConfig = {
 }
 
 export const DEFAULT_API_URL = 'https://api.folotoy.cn'
-export const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? '198.19.249.25'
+export const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.qrc92.cn'
 export const DEFAULT_MQTT_PORT = 1883
 
 export function flatToPluginConfig(flat: FlatChannelConfig): PluginConfig {
