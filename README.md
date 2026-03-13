@@ -86,25 +86,46 @@ password: {toy_key}
 {
   "msgId": 1,
   "identifier": "chat_input",
-  "outParams": {
-    "text": "hello"
+  "inputParams": {
+    "text": "hello",
+    "recording_id": 100
   }
 }
 ```
 
 **Plugin → Toy (outbound)**
 
+Multiple response chunks with auto-incrementing `order`, followed by a finish message:
+
 ```json
 {
   "msgId": 1,
   "identifier": "chat_output",
   "outParams": {
-    "content": "hello"
+    "content": "hello",
+    "recording_id": 100,
+    "order": 1,
+    "is_finished": false
   }
 }
 ```
 
-`msgId` starts at 1 per session and auto-increments.
+Finish message (`is_finished: true`, empty content):
+
+```json
+{
+  "msgId": 1,
+  "identifier": "chat_output",
+  "outParams": {
+    "content": "",
+    "recording_id": 100,
+    "order": 2,
+    "is_finished": true
+  }
+}
+```
+
+`msgId` starts at 1 per session and auto-increments. `recording_id` is passed through from the inbound message.
 
 ## Environments
 

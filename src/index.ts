@@ -7,13 +7,13 @@ import type { MqttClient } from 'mqtt'
 type InboundMessage = {
   msgId: number
   identifier: 'chat_input'
-  outParams: { text: string }
+  inputParams: { text: string; recording_id: number }
 }
 
 type OutboundMessage = {
   msgId: number
   identifier: 'chat_output'
-  outParams: { content: string }
+  outParams: { content: string; recording_id: number; order: number; is_finished: boolean }
 }
 
 // Per-account MQTT clients and msgId counters
@@ -100,9 +100,10 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         } catch {
           return
         }
-        if (msg.identifier !== 'chat_input' || typeof msg.outParams?.text !== 'string') return
+        if (msg.identifier !== 'chat_input' || typeof msg.inputParams?.text !== 'string') return
 
-        const { msgId, outParams: { text } } = msg
+        const { msgId, inputParams: { text, recording_id } } = msg
+        let order = 0
 
         const inboundCtx = channelRuntime.reply.finalizeInboundContext({
           Body: text,
@@ -113,23 +114,36 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           Provider: 'folotoy',
         })
 
-        // fire-and-forget: OpenClaw handles queuing internally
-        void channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher({
-          ctx: inboundCtx,
-          cfg,
-          dispatcherOptions: {
-            deliver: async (replyPayload) => {
-              if (!replyPayload.text) return
-              const outMsg: OutboundMessage = {
-                msgId,
-                identifier: 'chat_output',
-                outParams: { content: replyPayload.text },
-              }
-              client.publish(outboundTopic, JSON.stringify(outMsg))
-            },
-            onError: (err) => log?.error?.(`Dispatch error: ${String(err)}`),
-          },
-        })
+        // dispatch and send finish message when done
+        void (async () => {
+          try {
+            await channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher({
+              ctx: inboundCtx,
+              cfg,
+              dispatcherOptions: {
+                deliver: async (replyPayload) => {
+                  if (!replyPayload.text) return
+                  order++
+                  const outMsg: OutboundMessage = {
+                    msgId,
+                    identifier: 'chat_output',
+                    outParams: { content: replyPayload.text, recording_id, order, is_finished: false },
+                  }
+                  client.publish(outboundTopic, JSON.stringify(outMsg))
+                },
+                onError: (err) => log?.error?.(`Dispatch error: ${String(err)}`),
+              },
+            })
+          } finally {
+            order++
+            const finishMsg: OutboundMessage = {
+              msgId,
+              identifier: 'chat_output',
+              outParams: { content: '', recording_id, order, is_finished: true },
+            }
+            client.publish(outboundTopic, JSON.stringify(finishMsg))
+          }
+        })()
       })
 
       // Keep the account alive until aborted

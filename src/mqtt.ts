@@ -57,7 +57,9 @@ export async function createMqttClient(config: PluginConfig, credentials: MqttCr
   const { username, password } = credentials
 
   return new Promise((resolve, reject) => {
+    const clientId = `openapi:${username}`
     const client = mqtt.connect(`mqtt://${host}:${port}`, {
+      clientId,
       username: `openapi:${username}`,
       password,
       clean: true,

@@ -96,27 +96,46 @@ MQTT password: {toy_key}
 {
   "msgId": 1,
   "identifier": "chat_input",
-  "outParams": {
-    "text": "hello"
+  "inputParams": {
+    "text": "hello",
+    "recording_id": 100
   }
 }
 ```
 
 ### 插件 → 玩具（下行）
 
-非流式，单条回复，`outParams` 参考 OpenAI 非流式响应结构：
+多条回复，`order` 从 1 开始自增，最后发送 `is_finished: true` 的结束消息：
 
 ```json
 {
   "msgId": 1,
   "identifier": "chat_output",
   "outParams": {
-    "content": "hello"
+    "content": "hello",
+    "recording_id": 100,
+    "order": 1,
+    "is_finished": false
   }
 }
 ```
 
-`msgId` 每个会话从 1 开始自增，用于关联请求和响应。
+结束消息：
+
+```json
+{
+  "msgId": 1,
+  "identifier": "chat_output",
+  "outParams": {
+    "content": "",
+    "recording_id": 100,
+    "order": 2,
+    "is_finished": true
+  }
+}
+```
+
+`msgId` 每个会话从 1 开始自增。`recording_id` 从上行消息透传。
 
 ## Tech Stack
 
