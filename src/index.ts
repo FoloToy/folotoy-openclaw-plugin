@@ -81,6 +81,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       }
 
       const mqttConfig = flatToPluginConfig(account)
+      log?.info?.(`Connecting to MQTT broker ${mqttConfig.mqtt.host}:${mqttConfig.mqtt.port}...`)
       const credentials = await resolveCredentials(mqttConfig)
       const client = await createMqttClient(mqttConfig, credentials)
       const inboundTopic = buildInboundTopic(credentials.toy_sn)
