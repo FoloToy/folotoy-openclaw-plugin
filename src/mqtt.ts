@@ -52,6 +52,10 @@ export function buildOutboundTopic(toy_sn: string): string {
   return `/openapi/folotoy/${toy_sn}/thing/command/callAck`
 }
 
+export function buildNotificationTopic(toy_sn: string): string {
+  return `/openapi/folotoy/${toy_sn}/thing/event/post`
+}
+
 export async function createMqttClient(config: PluginConfig, credentials: MqttCredentials): Promise<MqttClient> {
   const { host, port } = config.mqtt
   const { username, password } = credentials

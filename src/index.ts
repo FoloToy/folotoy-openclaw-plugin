@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi, ChannelPlugin } from 'openclaw/plugin-sdk/core'
-import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic } from './mqtt.js'
+import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
@@ -14,6 +14,12 @@ type OutboundMessage = {
   msgId: number
   identifier: 'chat_output'
   outParams: { content: string; recording_id: number; order: number; is_finished: boolean }
+}
+
+type NotificationMessage = {
+  msgId: number
+  identifier: 'send_notification'
+  outParams: { text: string }
 }
 
 // Per-account MQTT clients and msgId counters
@@ -172,15 +178,31 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
 
       const outboundTopic = buildOutboundTopic(entry.toy_sn)
       const msgId = entry.nextMsgId++
-      const outMsg: OutboundMessage = {
+      const outMsg = {
         msgId,
-        identifier: 'chat_output',
+        identifier: 'chat_output' as const,
         outParams: { content: text },
       }
       entry.client.publish(outboundTopic, JSON.stringify(outMsg))
       return { channel: 'folotoy', messageId: String(msgId) }
     },
   },
+}
+
+export function sendNotification({ text, accountId }: { text: string; accountId?: string }) {
+  const key = accountId ?? 'default'
+  const entry = activeClients.get(key)
+  if (!entry) throw new Error(`No active MQTT client for account "${key}"`)
+
+  const notificationTopic = buildNotificationTopic(entry.toy_sn)
+  const msgId = entry.nextMsgId++
+  const notifMsg: NotificationMessage = {
+    msgId,
+    identifier: 'send_notification',
+    outParams: { text },
+  }
+  entry.client.publish(notificationTopic, JSON.stringify(notifMsg))
+  return { channel: 'folotoy', messageId: String(msgId) }
 }
 
 export default (api: OpenClawPluginApi) => {

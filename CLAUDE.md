@@ -84,8 +84,9 @@ MQTT password: {toy_key}
 上行和下行使用不同的 topic：
 
 ```
-上行（Toy → Plugin）: /openapi/folotoy/{sn}/thing/command/call
-下行（Plugin → Toy）: /openapi/folotoy/{sn}/thing/command/callAck
+上行（Toy → Plugin）:  /openapi/folotoy/{sn}/thing/command/call
+下行（Plugin → Toy）:  /openapi/folotoy/{sn}/thing/command/callAck
+通知（Plugin → Toy）:  /openapi/folotoy/{sn}/thing/event/post
 ```
 
 ## Message Formats
@@ -136,6 +137,20 @@ MQTT password: {toy_key}
 ```
 
 `msgId` 每个会话从 1 开始自增。`recording_id` 从上行消息透传。
+
+### 插件 → 玩具（主动通知）
+
+插件主动推送消息给玩具（如定时提醒），使用 `event/post` topic：
+
+```json
+{
+  "msgId": 1,
+  "identifier": "send_notification",
+  "outParams": {
+    "text": "该喝水啦"
+  }
+}
+```
 
 ## Tech Stack
 
