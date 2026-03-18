@@ -134,16 +134,18 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         if (msg.identifier !== 'chat_input' || typeof msg.inputParams?.text !== 'string') return
 
         const { msgId, inputParams: { text, recording_id } } = msg
-        let order = 0
+        let order = 1 // starts at 1 because order=0 is reserved for the ack
 
-        // Send a quick soothing acknowledgment before AI processing
-        const notificationTopic = buildNotificationTopic(credentials.toy_sn)
-        const soothingMsg: NotificationMessage = {
+        // Send a quick soothing acknowledgment before AI processing.
+        // Use the same chat_output topic and identifier that the toy already
+        // uses for AI replies, so the acknowledgment is guaranteed to be spoken
+        // regardless of firmware version. order=0 so it plays before AI chunks.
+        const ackMsg: OutboundMessage = {
           msgId,
-          identifier: 'send_notification',
-          outParams: { text: pickSoothingReply(text) },
+          identifier: 'chat_output',
+          outParams: { content: pickSoothingReply(text), recording_id, order: 0, is_finished: false },
         }
-        client.publish(notificationTopic, JSON.stringify(soothingMsg))
+        client.publish(outboundTopic, JSON.stringify(ackMsg))
 
         const inboundCtx = channelRuntime.reply.finalizeInboundContext({
           Body: text,
