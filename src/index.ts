@@ -134,16 +134,14 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         if (msg.identifier !== 'chat_input' || typeof msg.inputParams?.text !== 'string') return
 
         const { msgId, inputParams: { text, recording_id } } = msg
-        let order = 1 // starts at 1 because order=0 is reserved for the ack
+        let order = 1
 
-        // Send a quick soothing acknowledgment before AI processing.
-        // Use the same chat_output topic and identifier that the toy already
-        // uses for AI replies, so the acknowledgment is guaranteed to be spoken
-        // regardless of firmware version. order=0 so it plays before AI chunks.
+        // Send a quick soothing acknowledgment before AI processing (order=1).
+        // AI replies continue from order=2.
         const ackMsg: OutboundMessage = {
           msgId,
           identifier: 'chat_output',
-          outParams: { content: pickSoothingReply(text), recording_id, order: 0, is_finished: false },
+          outParams: { content: pickSoothingReply(text), recording_id, order, is_finished: false },
         }
         client.publish(outboundTopic, JSON.stringify(ackMsg))
 
