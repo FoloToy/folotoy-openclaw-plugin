@@ -1,5 +1,6 @@
 import type { OpenClawPluginApi, ChannelPlugin } from 'openclaw/plugin-sdk/core'
 import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
+import { pickSoothingReply } from './soothing.js'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
@@ -20,30 +21,6 @@ type NotificationMessage = {
   msgId: number
   identifier: 'send_notification'
   outParams: { text: string }
-}
-
-/** Pick a soothing acknowledgment that loosely matches the input. */
-function pickSoothingReply(text: string): string {
-  const t = text.toLowerCase()
-
-  if (/难过|伤心|哭|不开心|sad|upset|cry/.test(t))
-    return '抱抱你，我在听呢，让我想想怎么帮你。'
-  if (/害怕|恐惧|怕|scared|afraid/.test(t))
-    return '别怕，有我在呢，让我想一想。'
-  if (/生气|愤怒|烦|angry|mad/.test(t))
-    return '我理解你的感受，让我来帮你想想办法。'
-  if (/累|疲|困|tired|exhausted/.test(t))
-    return '辛苦了，休息一下，我来帮你想。'
-  if (/无聊|没意思|bored/.test(t))
-    return '我来陪你聊聊吧，让我想想。'
-  if (/谢|感谢|thank/.test(t))
-    return '不客气呀，让我想想还能帮你什么。'
-  if (/你好|嗨|hello|hi|hey/.test(t))
-    return '你好呀！让我想想怎么回答你。'
-  if (/帮|help|怎么办/.test(t))
-    return '没问题，让我帮你想想办法。'
-
-  return '好的，让我想一想，马上回复你。'
 }
 
 // Per-account MQTT clients and msgId counters
