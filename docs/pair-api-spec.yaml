@@ -1,0 +1,259 @@
+openapi: 3.1.0
+info:
+  title: FoloToy Pairing API
+  description: |
+    用于 FoloToy OpenClaw 插件扫码配对的服务端 API。
+
+    ## 流程
+
+    1. CLI 调用 `POST /api/pair` 创建配对会话
+    2. CLI 在终端显示 QR 码，内容为 `pair_url`
+    3. 用户手机扫描终端 QR 码，打开 `pair_url` 网页
+    4. 手机网页调用摄像头扫描玩具 QR 码，解析出 `toy_sn&toy_key`
+    5. 手机网页调用 `POST /api/pair/{session_id}/complete` 提交凭证
+    6. CLI 轮询 `GET /api/pair/{session_id}` 获取结果
+    7. CLI 将凭证写入 openclaw 配置
+
+    ## 安全说明
+
+    - session_id 使用 UUID v4 或至少 128 位随机 token，防止猜测
+    - 会话 5 分钟过期，过期后自动清理
+    - 无需用户登录，任何持有 session_id 的人均可完成配对
+    - 生产环境强制 HTTPS
+  version: 1.0.0
+
+servers:
+  - url: https://pair.folotoy.cn
+    description: Production
+
+paths:
+  /api/pair:
+    post:
+      summary: 创建配对会话
+      description: |
+        CLI 调用此接口创建一个新的配对会话。
+        返回 session_id 和 pair_url，CLI 将 pair_url 编码为 QR 码显示在终端。
+      operationId: createPairSession
+      responses:
+        '201':
+          description: 会话创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+              example:
+                session_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                pair_url: "https://pair.folotoy.cn/s/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                expires_at: "2026-03-19T14:05:00Z"
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pair/{session_id}:
+    get:
+      summary: 查询配对状态
+      description: |
+        CLI 每 3 秒轮询此接口，检查配对是否完成。
+
+        状态流转：`pending` → `completed` 或 `expired`
+      operationId: getPairSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: 返回当前会话状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollResponse'
+              examples:
+                pending:
+                  summary: 等待手机扫码
+                  value:
+                    status: pending
+                completed:
+                  summary: 配对完成
+                  value:
+                    status: completed
+                    toy_sn: "1051db8d0d0c"
+                    toy_key: "Zq1JX7Agfq1J"
+                    mqtt_host: "f.qrc92.cn"
+                    mqtt_port: 1883
+                expired:
+                  summary: 会话已过期
+                  value:
+                    status: expired
+        '404':
+          description: 会话不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Session not found"
+
+  /api/pair/{session_id}/complete:
+    post:
+      summary: 提交配对凭证
+      description: |
+        手机网页扫描玩具 QR 码后，解析出 `toy_sn&toy_key`，调用此接口提交。
+
+        玩具 QR 码格式：`{toy_sn}&{toy_key}`，以 `&` 分隔。
+      operationId: completePairSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequest'
+            example:
+              toy_credentials: "1051db8d0d0c&Zq1JX7Agfq1J"
+      responses:
+        '200':
+          description: 凭证提交成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+              example:
+                ok: true
+        '400':
+          description: 请求格式错误（缺少字段或格式不合法）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid toy_credentials format, expected 'sn&key'"
+        '404':
+          description: 会话不存在或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Session not found or expired"
+        '409':
+          description: 会话已完成，不可重复提交
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Session already completed"
+
+components:
+  parameters:
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      description: 配对会话 ID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    CreateSessionResponse:
+      type: object
+      required:
+        - session_id
+        - pair_url
+        - expires_at
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: 配对会话唯一标识
+        pair_url:
+          type: string
+          format: uri
+          description: 手机扫码后打开的网页地址
+        expires_at:
+          type: string
+          format: date-time
+          description: 会话过期时间（UTC），默认 5 分钟
+
+    PollResponse:
+      oneOf:
+        - $ref: '#/components/schemas/PollPending'
+        - $ref: '#/components/schemas/PollCompleted'
+        - $ref: '#/components/schemas/PollExpired'
+      discriminator:
+        propertyName: status
+        mapping:
+          pending: '#/components/schemas/PollPending'
+          completed: '#/components/schemas/PollCompleted'
+          expired: '#/components/schemas/PollExpired'
+
+    PollPending:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [pending]
+
+    PollCompleted:
+      type: object
+      required:
+        - status
+        - toy_sn
+        - toy_key
+      properties:
+        status:
+          type: string
+          enum: [completed]
+        toy_sn:
+          type: string
+          description: 玩具序列号
+        toy_key:
+          type: string
+          description: 玩具密钥
+        mqtt_host:
+          type: string
+          description: MQTT Broker 地址（可选，不传则使用插件默认值）
+        mqtt_port:
+          type: integer
+          description: MQTT Broker 端口（可选，不传则使用插件默认值）
+
+    PollExpired:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [expired]
+
+    CompleteRequest:
+      type: object
+      required:
+        - toy_credentials
+      properties:
+        toy_credentials:
+          type: string
+          description: |
+            玩具 QR 码扫描结果，格式为 `{toy_sn}&{toy_key}`。
+            服务端需校验包含且仅包含一个 `&` 分隔符。
+          example: "1051db8d0d0c&Zq1JX7Agfq1J"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 错误描述
