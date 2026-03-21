@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process'
 import qrcode from 'qrcode-terminal'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from '../config.js'
 
-const PAIR_API_BASE = 'https://pair.folotoy.cn'
+const PAIR_API_BASE = process.env.PAIR_API_BASE ?? 'https://pair.folotoy.cn'
 const POLL_INTERVAL_MS = 3000
 const POLL_TIMEOUT_MS = 300_000 // 5 minutes
 
