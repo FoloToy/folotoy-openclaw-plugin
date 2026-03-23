@@ -26,10 +26,10 @@ folotoy-openclaw-plugin/
 ├── package.json
 ├── tsconfig.json
 └── src/
-    ├── index.ts           # 插件入口，注册 channel
-    ├── channel.ts         # ChannelPlugin 实现
-    ├── mqtt.ts            # MQTT 连接与认证逻辑
-    └── config.ts          # 配置 schema 定义
+    ├── index.ts           # 插件入口，注册 channel，消息处理与摘要逻辑
+    ├── mqtt.ts            # MQTT 连接、认证与指数回退重连
+    ├── config.ts          # 配置 schema 定义
+    └── soothing.ts        # 安抚回复（收到消息后立即发送的过渡语）
 ```
 
 ## Architecture
@@ -40,7 +40,7 @@ FoloToy 玩具  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Thi
 
 插件作为双向桥接：
 - **上行（Inbound）**: 订阅 topic → 接收玩具消息 → 转发给 OpenClaw
-- **下行（Outbound）**: 接收 OpenClaw 响应 → 流式发布到 topic（OpenAI chunk 格式）
+- **下行（Outbound）**: 接收 OpenClaw 响应 → 缓冲全部回复 → 超长时自动摘要 → 发布到 topic
 
 ## Authentication
 
@@ -63,19 +63,21 @@ Content-Type: application/json
 {"username": "xxx", "password": "xxxx"}
 ```
 
-**Step 2**: 用返回的凭证连接 MQTT Broker，username 加 `openapi:` 前缀以与玩具本身的连接区分：
+**Step 2**: 用返回的凭证连接 MQTT Broker，`clientId` 使用 `openapi:` 前缀以与玩具本身的连接区分：
 
 ```
-MQTT username: openapi:{username}
+MQTT clientId: openapi:{toy_sn}
+MQTT username: {username}
 MQTT password: {password}
 ```
 
 ### Flow 2: 直接配置 SN + Key（默认）
 1. 直接配置玩具 SN 和 key（无需调用 HTTP API）
-2. 插件连接 MQTT Broker，username 加 `openapi:` 前缀：
+2. 插件连接 MQTT Broker，`clientId` 使用 `openapi:` 前缀：
 
 ```
-MQTT username: openapi:{toy_sn}
+MQTT clientId: openapi:{toy_sn}
+MQTT username: {toy_sn}
 MQTT password: {toy_key}
 ```
 
@@ -162,6 +164,22 @@ MQTT password: {toy_key}
 
 > 插件依赖必须是纯 JS/TS，不能有 postinstall 构建步骤（OpenClaw 用 `npm install --ignore-scripts` 安装插件）
 
+## Reply Summary
+
+当 AI 回复文本长度超过配置的字符上限时，插件会调用 primary 模型生成摘要后再发送给玩具，避免语音播放时间过长。
+
+- 摘要 prompt 与 OpenClaw 内置 TTS `summarizeText` 保持一致
+- 摘要失败时回退为截断（`text.slice(0, maxChars - 3) + "..."`）
+- 可通过配置关闭摘要功能
+
+## MQTT Reconnection
+
+连接 MQTT Broker 失败时使用指数回退策略重连：
+
+- 初始间隔：1 秒
+- 每次失败翻倍，上限 60 秒
+- 连接成功后重置为初始间隔
+
 ## Configuration Reference
 
 ```yaml
@@ -173,13 +191,18 @@ auth:
   toy_sn: ""           # 玩具 SN，同时作为请求 body 和 topic 中的 {sn}
 
   # Flow 2: 直接配置 SN + Key
-  # toy_sn: ""    # 拼接为 MQTT username: openapi:{toy_sn}
+  # toy_sn: ""    # 作为 MQTT username
   # toy_key: ""   # 作为 MQTT password
 
 # MQTT broker
 mqtt:
   host: ""             # 见下方环境说明
   port: 1883
+
+# 回复摘要
+summary:
+  summary_enabled: true   # 是否开启摘要（默认 true）
+  summary_max_chars: 200  # 触发摘要的字符上限（默认 200）
 ```
 
 ## Environments
