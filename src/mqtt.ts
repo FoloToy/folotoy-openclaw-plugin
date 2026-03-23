@@ -56,6 +56,9 @@ export function buildNotificationTopic(toy_sn: string): string {
   return `/openapi/folotoy/${toy_sn}/thing/event/post`
 }
 
+const INITIAL_RECONNECT_MS = 1000
+const MAX_RECONNECT_MS = 60000
+
 export async function createMqttClient(config: PluginConfig, credentials: MqttCredentials): Promise<MqttClient> {
   const { host, port } = config.mqtt
   const { username, password } = credentials
@@ -67,6 +70,18 @@ export async function createMqttClient(config: PluginConfig, credentials: MqttCr
       username: `openapi:${username}`,
       password,
       clean: true,
+      reconnectPeriod: INITIAL_RECONNECT_MS,
+    })
+
+    // Exponential backoff: increase reconnectPeriod on each failed attempt,
+    // reset on successful connection.
+    client.on('reconnect', () => {
+      const current = client.options.reconnectPeriod ?? INITIAL_RECONNECT_MS
+      client.options.reconnectPeriod = Math.min(current * 2, MAX_RECONNECT_MS)
+    })
+
+    client.on('connect', () => {
+      client.options.reconnectPeriod = INITIAL_RECONNECT_MS
     })
 
     client.once('connect', () => resolve(client))
