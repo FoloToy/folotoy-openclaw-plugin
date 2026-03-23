@@ -1,7 +1,7 @@
-import type { OpenClawPluginApi, ChannelPlugin } from 'openclaw/plugin-sdk/core'
+import type { OpenClawPluginApi, ChannelPlugin, PluginRuntime } from 'openclaw/plugin-sdk/core'
 import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
 import { pickSoothingReply } from './soothing.js'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, flatToPluginConfig } from './config.js'
+import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
 
@@ -26,6 +26,9 @@ type NotificationMessage = {
 // Per-account MQTT clients and msgId counters
 const activeClients = new Map<string, { client: MqttClient; toy_sn: string; nextMsgId: number }>()
 
+// Subagent reference, set at plugin registration
+let subagent: PluginRuntime['subagent'] | undefined
+
 const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
   id: 'folotoy',
   meta: {
@@ -49,6 +52,8 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         api_key: { type: 'string' },
         mqtt_host: { type: 'string', default: DEFAULT_MQTT_HOST },
         mqtt_port: { type: 'number', default: DEFAULT_MQTT_PORT },
+        summary_enabled: { type: 'boolean', default: DEFAULT_SUMMARY_ENABLED },
+        summary_max_chars: { type: 'number', default: DEFAULT_SUMMARY_MAX_CHARS },
       },
     },
     uiHints: {
@@ -59,6 +64,8 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       api_key: { label: 'API Key', sensitive: true },
       mqtt_host: { label: 'MQTT Host', placeholder: DEFAULT_MQTT_HOST },
       mqtt_port: { label: 'MQTT Port' },
+      summary_enabled: { label: 'Enable Summary' },
+      summary_max_chars: { label: 'Summary Max Characters' },
     },
   },
   config: {
@@ -101,6 +108,9 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         if (err) log?.error?.(`Failed to subscribe: ${err.message}`)
       })
 
+      const summaryEnabled = account.summary_enabled ?? DEFAULT_SUMMARY_ENABLED
+      const summaryMaxChars = account.summary_max_chars ?? DEFAULT_SUMMARY_MAX_CHARS
+
       client.on('message', (_topic, payload) => {
         let msg: InboundMessage
         try {
@@ -131,8 +141,9 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           Provider: 'folotoy',
         })
 
-        // dispatch and send finish message when done
+        // dispatch, optionally summarize, then send finish message
         void (async () => {
+          const replyChunks: string[] = []
           try {
             await channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher({
               ctx: inboundCtx,
@@ -140,17 +151,54 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
               dispatcherOptions: {
                 deliver: async (replyPayload) => {
                   if (!replyPayload.text) return
-                  order++
-                  const outMsg: OutboundMessage = {
-                    msgId,
-                    identifier: 'chat_output',
-                    outParams: { content: replyPayload.text, recording_id, order, is_finished: false },
-                  }
-                  client.publish(outboundTopic, JSON.stringify(outMsg))
+                  replyChunks.push(replyPayload.text)
                 },
                 onError: (err) => log?.error?.(`Dispatch error: ${String(err)}`),
               },
             })
+
+            let finalText = replyChunks.join('')
+
+            // Summarize if enabled and text exceeds threshold
+            if (summaryEnabled && subagent && finalText.length > summaryMaxChars) {
+              try {
+                const sessionKey = `folotoy-summary-${accountId}-${Date.now()}`
+                const { runId } = await subagent.run({
+                  sessionKey,
+                  message: [
+                    `You are an assistant that summarizes texts concisely while keeping the most important information.`,
+                    `Summarize the text to approximately ${summaryMaxChars} characters.`,
+                    `Maintain the original tone and style. Reply only with the summary, without additional explanations.`,
+                    ``,
+                    `<text_to_summarize>`,
+                    finalText,
+                    `</text_to_summarize>`,
+                  ].join('\n'),
+                  deliver: false,
+                })
+                const result = await subagent.waitForRun({ runId, timeoutMs: 30_000 })
+                if (result.status === 'ok') {
+                  const { messages } = await subagent.getSessionMessages({ sessionKey, limit: 1 })
+                  const lastMsg = messages[messages.length - 1] as { content?: string; text?: string } | undefined
+                  const summaryText = lastMsg?.content ?? lastMsg?.text
+                  if (summaryText) finalText = summaryText
+                }
+                await subagent.deleteSession({ sessionKey }).catch(() => {})
+              } catch (err) {
+                log?.warn?.(`Summary failed, truncating text: ${String(err)}`)
+                finalText = `${finalText.slice(0, summaryMaxChars - 3)}...`
+              }
+            }
+
+            if (finalText) {
+              order++
+              const outMsg: OutboundMessage = {
+                msgId,
+                identifier: 'chat_output',
+                outParams: { content: finalText, recording_id, order, is_finished: false },
+              }
+              client.publish(outboundTopic, JSON.stringify(outMsg))
+            }
           } finally {
             order++
             const finishMsg: OutboundMessage = {
@@ -216,5 +264,6 @@ export function sendNotification({ text, accountId }: { text: string; accountId?
 }
 
 export default (api: OpenClawPluginApi) => {
+  subagent = api.runtime.subagent
   api.registerChannel({ plugin: folotoyChannel })
 }
