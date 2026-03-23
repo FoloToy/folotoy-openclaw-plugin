@@ -87,6 +87,14 @@ async function pollSession(sessionId: string): Promise<PollResponse & { status: 
   throw new Error('Pairing timed out after 5 minutes.')
 }
 
+function restartGateway(): void {
+  try {
+    execSync('openclaw gateway restart', { stdio: 'inherit' })
+  } catch {
+    console.warn('⚠ Failed to restart gateway. You can restart manually: openclaw gateway restart')
+  }
+}
+
 function writeConfig(result: { toy_sn: string; toy_key: string; mqtt_host?: string; mqtt_port?: number }): void {
   execSync(`openclaw config set channels.folotoy.flow direct`, { stdio: 'pipe' })
   execSync(`openclaw config set channels.folotoy.toy_sn ${result.toy_sn}`, { stdio: 'pipe' })
@@ -134,11 +142,14 @@ async function main() {
   console.log('\nWriting configuration...')
   writeConfig(result)
 
-  // Step 7: done
+  // Step 7: restart gateway
+  console.log('\nRestarting gateway...')
+  restartGateway()
+
+  // Step 8: done
   console.log('\n\x1b[32m✓ FoloToy plugin installed and configured!\x1b[0m')
   console.log(`  Toy SN:    ${result.toy_sn}`)
   console.log(`  MQTT Host: ${result.mqtt_host ?? DEFAULT_MQTT_HOST}`)
-  console.log('\nRestart the gateway to apply: openclaw gateway start --force')
 }
 
 main().catch((err) => {
