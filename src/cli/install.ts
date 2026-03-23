@@ -149,7 +149,6 @@ async function main() {
   // Step 8: done
   console.log('\n\x1b[32m✓ FoloToy plugin installed and configured!\x1b[0m')
   console.log(`  Toy SN:    ${result.toy_sn}`)
-  console.log(`  MQTT Host: ${result.mqtt_host ?? DEFAULT_MQTT_HOST}`)
 }
 
 main().catch((err) => {

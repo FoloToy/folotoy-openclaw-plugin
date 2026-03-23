@@ -143,7 +143,7 @@ const DEFAULT_CANDIDATES = [
 ]
 
 function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
+  return arr[Math.floor(Math.random() * arr.length)] as T
 }
 
 /** Returns one randomly chosen soothing reply matching the input intent. */
