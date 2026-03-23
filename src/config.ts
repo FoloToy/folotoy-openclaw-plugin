@@ -28,11 +28,15 @@ export type FlatChannelConfig = {
   api_key?: string
   mqtt_host?: string
   mqtt_port?: number
+  summary_enabled?: boolean
+  summary_max_chars?: number
 }
 
 export const DEFAULT_API_URL = 'https://api.folotoy.cn'
 export const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.qrc92.cn'
 export const DEFAULT_MQTT_PORT = 1883
+export const DEFAULT_SUMMARY_ENABLED = true
+export const DEFAULT_SUMMARY_MAX_CHARS = 200
 
 export function flatToPluginConfig(flat: FlatChannelConfig): PluginConfig {
   const flow = flat.flow ?? 'direct'
