@@ -10,9 +10,19 @@ FoloToy Toy  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Plugin
 
 ## Installation
 
+Interactive install (scan QR code to pair your toy):
+
+```bash
+npx @folotoy/folotoy-openclaw-plugin install
+```
+
+Or install manually:
+
 ```bash
 openclaw plugins install @folotoy/folotoy-openclaw-plugin
 ```
+
+The interactive installer will pair your toy, write the config, and automatically restart the OpenClaw gateway.
 
 For local development:
 
@@ -71,8 +81,9 @@ Example `openclaw.json`:
 Inbound and outbound use separate topics:
 
 ```
-Inbound  (Toy → Plugin):  /openapi/folotoy/{sn}/thing/command/call
-Outbound (Plugin → Toy):  /openapi/folotoy/{sn}/thing/command/callAck
+Inbound      (Toy → Plugin):  /openapi/folotoy/{sn}/thing/command/call
+Outbound     (Plugin → Toy):  /openapi/folotoy/{sn}/thing/command/callAck
+Notification (Plugin → Toy):  /openapi/folotoy/{sn}/thing/event/post
 ```
 
 The plugin connects with an `openapi:` prefix on the `clientId` to distinguish itself from the toy's own connection:
@@ -157,6 +168,10 @@ Immediately sends a transitional reply (e.g., "Let me think...") upon receiving 
 ### Exponential Backoff Reconnection
 
 MQTT connection failures trigger automatic reconnection with exponential backoff (1s → 60s cap), resetting on success.
+
+### Auto-restart Gateway
+
+After interactive installation (`npx @folotoy/folotoy-openclaw-plugin install`), the plugin automatically restarts the OpenClaw gateway so changes take effect immediately.
 
 ## Development
 
