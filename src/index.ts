@@ -234,14 +234,14 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const entry = activeClients.get(key)
       if (!entry) throw new Error(`No active MQTT client for account "${key}"`)
 
-      const outboundTopic = buildOutboundTopic(entry.toy_sn)
+      const notificationTopic = buildNotificationTopic(entry.toy_sn)
       const msgId = entry.nextMsgId++
-      const outMsg = {
+      const notifMsg: NotificationMessage = {
         msgId,
-        identifier: 'chat_output' as const,
-        outParams: { content: text },
+        identifier: 'send_notification',
+        outParams: { text },
       }
-      entry.client.publish(outboundTopic, JSON.stringify(outMsg))
+      entry.client.publish(notificationTopic, JSON.stringify(notifMsg))
       return { channel: 'folotoy', messageId: String(msgId) }
     },
   },
