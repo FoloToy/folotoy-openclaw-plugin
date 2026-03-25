@@ -145,6 +145,22 @@ Finish message (`is_finished: true`, empty content):
 
 `msgId` starts at 1 per session and auto-increments. `recording_id` is passed through from the inbound message.
 
+**Plugin → Toy (notification)**
+
+Proactive messages (e.g., timer reminders) use the `event/post` topic with a different identifier and payload format:
+
+```json
+{
+  "msgId": 1,
+  "identifier": "send_notification",
+  "outParams": {
+    "text": "Time to drink water!"
+  }
+}
+```
+
+Notifications are triggered via the OpenClaw `--deliver` mechanism (see [Testing Notifications](#testing-notifications)).
+
 ## Environments
 
 | Environment | MQTT Host | Port |
@@ -172,6 +188,21 @@ MQTT connection failures trigger automatic reconnection with exponential backoff
 ### Auto-restart Gateway
 
 After interactive installation (`npx @folotoy/folotoy-openclaw-plugin install`), the plugin automatically restarts the OpenClaw gateway so changes take effect immediately.
+
+## Testing Notifications
+
+To send a proactive notification to the toy via OpenClaw:
+
+```bash
+openclaw agent --agent main \
+  --message "你的通知内容" \
+  --deliver \
+  --reply-channel folotoy \
+  --reply-account default \
+  --reply-to <toy_sn>
+```
+
+This triggers the `outbound.sendText` path, which publishes a `send_notification` message to the `event/post` MQTT topic. The toy will receive and play the notification.
 
 ## Development
 
