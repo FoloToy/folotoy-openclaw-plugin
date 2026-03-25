@@ -136,9 +136,12 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           Body: text,
           From: credentials.toy_sn,
           To: credentials.toy_sn,
-          SessionKey: `folotoy-${accountId}-${credentials.toy_sn}`,
+          SessionKey: `agent:main:folotoy-${accountId}-${credentials.toy_sn}`,
           AccountId: accountId,
           Provider: 'folotoy',
+          Surface: 'folotoy',
+          OriginatingChannel: 'folotoy',
+          OriginatingTo: credentials.toy_sn,
         })
 
         // dispatch, optionally summarize, then send finish message
@@ -227,13 +230,21 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
     },
   },
 
+  messaging: {
+    targetResolver: {
+      looksLikeId: () => true,
+      hint: 'FoloToy toy SN (e.g. 1051db8d0d0c)',
+    },
+  },
+
   outbound: {
     deliveryMode: 'direct',
-    resolveTarget: ({ accountId }) => {
-      const key = accountId ?? 'default'
-      const entry = activeClients.get(key)
-      if (!entry) return { ok: false, error: new Error(`No active MQTT client for account "${key}"`) }
-      return { ok: true, to: entry.toy_sn }
+    resolveTarget: ({ to, cfg }) => {
+      if (to) return { ok: true, to }
+      const folotoy = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
+        ?.channels?.folotoy
+      if (folotoy?.toy_sn) return { ok: true, to: folotoy.toy_sn }
+      return { ok: false, error: new Error('No toy_sn configured for FoloToy') }
     },
     sendText: async ({ text, accountId }) => {
       const key = accountId ?? 'default'

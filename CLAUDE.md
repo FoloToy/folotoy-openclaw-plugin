@@ -12,6 +12,10 @@ pnpm test -- --run <file>  # 运行单个测试文件
 
 # 本地安装到 OpenClaw
 openclaw plugins install -l .
+
+# MQTT 集成测试（需要 .env 配置）
+node --env-file=.env src/__tests__/test-message.mjs chat "你好"
+node --env-file=.env src/__tests__/test-message.mjs reminder
 ```
 
 ## Project Overview

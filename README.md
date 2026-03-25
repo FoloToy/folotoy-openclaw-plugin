@@ -212,6 +212,31 @@ pnpm test
 pnpm build
 ```
 
+### MQTT Integration Test
+
+A manual integration test script simulates a FoloToy toy by connecting to the MQTT broker, sending a message, and verifying the response format.
+
+Configure `.env`:
+
+```env
+FOLOTOY_TOY_SN=your-toy-sn
+FOLOTOY_TOY_KEY=your-toy-key
+FOLOTOY_MQTT_HOST=192.168.10.100
+FOLOTOY_MQTT_PORT=1883
+FOLOTOY_TEST_MQTT_USERNAME=testuser      # optional, defaults to TOY_SN
+FOLOTOY_TEST_MQTT_PASSWORD=testpassword  # optional, defaults to TOY_KEY
+```
+
+Run:
+
+```bash
+# Chat test — verify soothing ack, AI reply, finish message
+node --env-file=.env src/__tests__/test-message.mjs chat "你好"
+
+# Reminder test — verify reply + wait for notification on event/post topic
+node --env-file=.env src/__tests__/test-message.mjs reminder
+```
+
 ## License
 
 MIT
