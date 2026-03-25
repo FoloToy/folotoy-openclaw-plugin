@@ -229,6 +229,12 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
 
   outbound: {
     deliveryMode: 'direct',
+    resolveTarget: ({ accountId }) => {
+      const key = accountId ?? 'default'
+      const entry = activeClients.get(key)
+      if (!entry) return { ok: false, error: new Error(`No active MQTT client for account "${key}"`) }
+      return { ok: true, to: entry.toy_sn }
+    },
     sendText: async ({ text, accountId }) => {
       const key = accountId ?? 'default'
       const entry = activeClients.get(key)
