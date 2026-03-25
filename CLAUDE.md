@@ -29,7 +29,9 @@ folotoy-openclaw-plugin/
     ├── index.ts           # 插件入口，注册 channel，消息处理与摘要逻辑
     ├── mqtt.ts            # MQTT 连接、认证与指数回退重连
     ├── config.ts          # 配置 schema 定义
-    └── soothing.ts        # 安抚回复（收到消息后立即发送的过渡语）
+    ├── soothing.ts        # 安抚回复（收到消息后立即发送的过渡语）
+    └── cli/
+        └── install.ts     # 交互式安装脚本（扫码配对 → 写入配置 → 重启 gateway）
 ```
 
 ## Architecture
@@ -108,7 +110,7 @@ MQTT password: {toy_key}
 
 ### 插件 → 玩具（下行）
 
-多条回复，`order` 从 1 开始自增，最后发送 `is_finished: true` 的结束消息：
+回复先缓冲全部内容，超过 `summary_max_chars` 时自动生成摘要。`order` 从 1 开始自增（order=1 为安抚回复），最后发送 `is_finished: true` 的结束消息：
 
 ```json
 {
@@ -163,6 +165,18 @@ MQTT password: {toy_key}
 - **Runtime loader**: jiti（支持直接运行 `.ts`）
 
 > 插件依赖必须是纯 JS/TS，不能有 postinstall 构建步骤（OpenClaw 用 `npm install --ignore-scripts` 安装插件）
+
+## CLI Install
+
+交互式安装脚本，通过 `npx @folotoy/folotoy-openclaw-plugin install` 运行：
+
+1. 生成配对二维码，用户用 FoloToy App 扫码
+2. 轮询配对 API 等待确认
+3. 获取玩具 SN 和 Key，写入 OpenClaw 配置
+4. 自动执行 `openclaw gateway restart` 重启网关服务
+5. 重启失败时打印警告，不中断安装流程
+
+配对 API 默认地址：`https://pair.folotoy.com`，可通过 `PAIR_API_BASE` 环境变量覆盖（用于本地测试）。
 
 ## Reply Summary
 
