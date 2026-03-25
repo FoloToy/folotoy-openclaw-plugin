@@ -215,3 +215,18 @@ summary:
 
 打包时通过环境变量或构建参数切换 `mqtt.host`，默认指向开发环境。
 
+## 测试通知
+
+通过 OpenClaw CLI 向玩具发送主动通知：
+
+```bash
+openclaw agent --agent main \
+  --message "你的通知内容" \
+  --deliver \
+  --reply-channel folotoy \
+  --reply-account default \
+  --reply-to <toy_sn>
+```
+
+这会触发插件的 `outbound.sendText`，将 `send_notification` 消息发布到 `event/post` MQTT topic。
+

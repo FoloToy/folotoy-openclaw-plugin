@@ -71,8 +71,9 @@ Example `openclaw.json`:
 Inbound and outbound use separate topics:
 
 ```
-Inbound  (Toy → Plugin):  /openapi/folotoy/{sn}/thing/command/call
-Outbound (Plugin → Toy):  /openapi/folotoy/{sn}/thing/command/callAck
+Inbound      (Toy → Plugin):  /openapi/folotoy/{sn}/thing/command/call
+Outbound     (Plugin → Toy):  /openapi/folotoy/{sn}/thing/command/callAck
+Notification (Plugin → Toy):  /openapi/folotoy/{sn}/thing/event/post
 ```
 
 The plugin connects with an `openapi:` prefix on the `clientId` to distinguish itself from the toy's own connection:
@@ -134,6 +135,22 @@ Finish message (`is_finished: true`, empty content):
 
 `msgId` starts at 1 per session and auto-increments. `recording_id` is passed through from the inbound message.
 
+**Plugin → Toy (notification)**
+
+Proactive messages (e.g., timer reminders) use the `event/post` topic with a different identifier and payload format:
+
+```json
+{
+  "msgId": 1,
+  "identifier": "send_notification",
+  "outParams": {
+    "text": "Time to drink water!"
+  }
+}
+```
+
+Notifications are triggered via the OpenClaw `--deliver` mechanism (see [Testing Notifications](#testing-notifications)).
+
 ## Environments
 
 | Environment | MQTT Host | Port |
@@ -157,6 +174,21 @@ Immediately sends a transitional reply (e.g., "Let me think...") upon receiving 
 ### Exponential Backoff Reconnection
 
 MQTT connection failures trigger automatic reconnection with exponential backoff (1s → 60s cap), resetting on success.
+
+## Testing Notifications
+
+To send a proactive notification to the toy via OpenClaw:
+
+```bash
+openclaw agent --agent main \
+  --message "你的通知内容" \
+  --deliver \
+  --reply-channel folotoy \
+  --reply-account default \
+  --reply-to <toy_sn>
+```
+
+This triggers the `outbound.sendText` path, which publishes a `send_notification` message to the `event/post` MQTT topic. The toy will receive and play the notification.
 
 ## Development
 
