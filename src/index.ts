@@ -132,11 +132,20 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         }
         client.publish(outboundTopic, JSON.stringify(ackMsg))
 
+        const peer = { kind: 'direct' as const, id: credentials.toy_sn }
+        const sessionKey = channelRuntime.routing.buildAgentSessionKey({
+          agentId: 'main',
+          channel: 'folotoy',
+          accountId,
+          peer,
+          dmScope: 'per-channel-peer',
+        })
+
         const inboundCtx = channelRuntime.reply.finalizeInboundContext({
           Body: text,
           From: credentials.toy_sn,
           To: credentials.toy_sn,
-          SessionKey: `agent:main:folotoy-${accountId}-${credentials.toy_sn}`,
+          SessionKey: sessionKey,
           AccountId: accountId,
           Provider: 'folotoy',
           Surface: 'folotoy',
@@ -144,20 +153,29 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           OriginatingTo: credentials.toy_sn,
         })
 
-        // dispatch, optionally summarize, then send finish message
+        // dispatch using dispatchReplyFromConfig (full agent capabilities including tools)
         void (async () => {
           const replyChunks: string[] = []
+          const dispatcher = {
+            sendToolResult: () => true,
+            sendBlockReply: () => true,
+            sendFinalReply: (payload: { text?: string }) => {
+              if (payload.text) replyChunks.push(payload.text)
+              return true
+            },
+            waitForIdle: async () => {},
+            getQueuedCounts: () => ({ tool: 0, block: 0, final: 0 }),
+            markComplete: () => {},
+          }
           try {
-            await channelRuntime.reply.dispatchReplyWithBufferedBlockDispatcher({
-              ctx: inboundCtx,
-              cfg,
-              dispatcherOptions: {
-                deliver: async (replyPayload) => {
-                  if (!replyPayload.text) return
-                  replyChunks.push(replyPayload.text)
-                },
-                onError: (err) => log?.error?.(`Dispatch error: ${String(err)}`),
-              },
+            await channelRuntime.reply.withReplyDispatcher({
+              dispatcher,
+              run: () =>
+                channelRuntime.reply.dispatchReplyFromConfig({
+                  ctx: inboundCtx,
+                  cfg,
+                  dispatcher,
+                }),
             })
 
             let finalText = replyChunks.join('')
@@ -227,6 +245,18 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
 
     stopAccount: async (_ctx) => {
       // cleanup handled by abortSignal listener in startAccount
+    },
+  },
+
+  agentPrompt: {
+    messageToolHints: ({ cfg }) => {
+      const folotoy = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
+        ?.channels?.folotoy
+      const sn = folotoy?.toy_sn ?? '<toy_sn>'
+      return [
+        `[FoloToy] This message is from a FoloToy toy (SN: ${sn}).`,
+        `To set reminders/timers, use the cron tool with: sessionTarget="isolated", payload.kind="agentTurn", delivery.mode="announce", delivery.channel="folotoy", delivery.to="${sn}", delivery.accountId="default".`,
+      ]
     },
   },
 

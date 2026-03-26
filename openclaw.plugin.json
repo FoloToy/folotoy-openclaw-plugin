@@ -2,7 +2,7 @@
   "id": "folotoy-openclaw-plugin",
   "name": "FoloToy",
   "description": "Empower your FoloToy with OpenClaw AI capabilities.",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "channels": ["folotoy"],
   "configSchema": {
     "type": "object",
