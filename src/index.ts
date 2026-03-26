@@ -79,6 +79,11 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         .channels?.folotoy
       return folotoy ?? ({} as FlatChannelConfig)
     },
+    resolveAllowFrom: ({ cfg }) => {
+      const sn = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
+        ?.channels?.folotoy?.toy_sn
+      return sn ? [sn] : undefined
+    },
   },
   gateway: {
     startAccount: async (ctx) => {
