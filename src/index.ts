@@ -237,6 +237,23 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
     },
   },
 
+  agentPrompt: {
+    messageToolHints: ({ cfg }) => {
+      const folotoy = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
+        ?.channels?.folotoy
+      const sn = folotoy?.toy_sn ?? '<toy_sn>'
+      return [
+        `[FoloToy Channel] This conversation comes from a FoloToy toy (SN: ${sn}).`,
+        `When creating cron jobs or reminders for this user, you MUST use announce delivery to the folotoy channel:`,
+        `  - delivery.mode: "announce"`,
+        `  - delivery.channel: "folotoy"`,
+        `  - delivery.to: "${sn}"`,
+        `  - delivery.accountId: "default"`,
+        `Do NOT use systemEvent — it will not reach the toy. The reminder must be delivered via the folotoy channel.`,
+      ]
+    },
+  },
+
   outbound: {
     deliveryMode: 'direct',
     resolveTarget: ({ to, cfg }) => {
@@ -248,7 +265,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
     },
     sendText: async ({ text, accountId }) => {
       const key = accountId ?? 'default'
-      const entry = activeClients.get(key)
+      const entry = activeClients.get(key) ?? activeClients.values().next().value
       if (!entry) throw new Error(`No active MQTT client for account "${key}"`)
 
       const notificationTopic = buildNotificationTopic(entry.toy_sn)
