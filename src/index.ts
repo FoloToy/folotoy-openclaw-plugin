@@ -258,9 +258,26 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const folotoy = (cfg as Record<string, unknown> & { channels?: { folotoy?: FlatChannelConfig } })
         ?.channels?.folotoy
       const sn = folotoy?.toy_sn ?? '<toy_sn>'
+      const now = new Date()
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const tzOffsetMin = -now.getTimezoneOffset()
+      const tzSign = tzOffsetMin >= 0 ? '+' : '-'
+      const tzH = String(Math.floor(Math.abs(tzOffsetMin) / 60)).padStart(2, '0')
+      const tzM = String(Math.abs(tzOffsetMin) % 60).padStart(2, '0')
+      const tzSuffix = `${tzSign}${tzH}:${tzM}`
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const nowLocal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${tzSuffix}`
       return [
-        `[FoloToy] This message is from a FoloToy toy (SN: ${sn}).`,
-        `To set reminders/timers, use the cron tool with: sessionTarget="isolated", payload.kind="agentTurn", delivery.mode="announce", delivery.channel="folotoy", delivery.to="${sn}", delivery.accountId="default".`,
+        `[FoloToy] This message is from a FoloToy toy (SN: ${sn}). Current time: ${nowLocal} (${tz}).`,
+        [
+          `To set reminders/timers, use the cron tool with action="add". IMPORTANT:`,
+          `- schedule.at MUST use the same timezone offset as current time (${tzSuffix}), NEVER use "Z"`,
+          `- For "N分钟后" reminders, add N minutes to current time ${nowLocal}`,
+          `- payload.kind MUST be "agentTurn" (NOT "systemEvent")`,
+          `- sessionTarget MUST be "isolated"`,
+          `- delivery MUST be: {"mode":"announce","channel":"folotoy","to":"${sn}","accountId":"default"}`,
+          `Example: {"action":"add","job":{"name":"喝水提醒","schedule":{"kind":"at","at":"2026-03-27T21:03:00${tzSuffix}"},"payload":{"kind":"agentTurn","message":"提醒用户喝水，用温暖的语气"},"sessionTarget":"isolated","delivery":{"mode":"announce","channel":"folotoy","to":"${sn}","accountId":"default"},"enabled":true}}`,
+        ].join('\n'),
       ]
     },
   },
