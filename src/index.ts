@@ -273,10 +273,10 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           `To set reminders/timers, use the cron tool with action="add". IMPORTANT:`,
           `- schedule.at MUST use the same timezone offset as current time (${tzSuffix}), NEVER use "Z"`,
           `- For "N分钟后" reminders, add N minutes to current time ${nowLocal}`,
-          `- payload.kind MUST be "agentTurn" (NOT "systemEvent")`,
+          `- payload.kind MUST be "systemEvent" with a "text" field containing the reminder message`,
           `- sessionTarget MUST be "isolated"`,
           `- delivery MUST be: {"mode":"announce","channel":"folotoy","to":"${sn}","accountId":"default"}`,
-          `Example: {"action":"add","job":{"name":"喝水提醒","schedule":{"kind":"at","at":"2026-03-27T21:03:00${tzSuffix}"},"payload":{"kind":"agentTurn","message":"提醒用户喝水，用温暖的语气"},"sessionTarget":"isolated","delivery":{"mode":"announce","channel":"folotoy","to":"${sn}","accountId":"default"},"enabled":true}}`,
+          `Example: {"action":"add","job":{"name":"喝水提醒","schedule":{"kind":"at","at":"2026-03-27T21:03:00${tzSuffix}"},"payload":{"kind":"systemEvent","text":"时间到啦，该喝水了！"},"sessionTarget":"isolated","delivery":{"mode":"announce","channel":"folotoy","to":"${sn}","accountId":"default"},"enabled":true}}`,
         ].join('\n'),
       ]
     },
