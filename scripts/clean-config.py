@@ -39,6 +39,10 @@ if "folotoy-openclaw-plugin" in allow:
     print("Removed folotoy-openclaw-plugin from plugins.allow")
     changed = True
 
+if cfg.get("plugins", {}).get("installs", {}).pop("folotoy-openclaw-plugin", None) is not None:
+    print("Removed plugins.installs.folotoy-openclaw-plugin")
+    changed = True
+
 if changed:
     with open(config_path, "w") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
