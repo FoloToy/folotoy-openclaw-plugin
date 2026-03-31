@@ -2,7 +2,7 @@ import type { OpenClawPluginApi, ChannelPlugin, PluginRuntime } from 'openclaw/p
 import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
 import { createSoothingPicker } from './soothing.js'
 import { stripMarkdown } from './strip-markdown.js'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, DEFAULT_SOOTHING_LOOP_INTERVAL_MS, DEFAULT_SOOTHING_LOOP_MAX_COUNT, flatToPluginConfig } from './config.js'
+import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, DEFAULT_SOOTHING_LOOP_INTERVAL_MS, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
 
@@ -59,7 +59,6 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         sentence_split_delimiters: { type: 'string', default: DEFAULT_SENTENCE_SPLIT_DELIMITERS },
         soothing_loop_enabled: { type: 'boolean', default: DEFAULT_SOOTHING_LOOP_ENABLED },
         soothing_loop_interval_ms: { type: 'number', default: DEFAULT_SOOTHING_LOOP_INTERVAL_MS },
-        soothing_loop_max_count: { type: 'number', default: DEFAULT_SOOTHING_LOOP_MAX_COUNT },
       },
     },
     uiHints: {
@@ -76,7 +75,6 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       sentence_split_delimiters: { label: 'Sentence Delimiters' },
       soothing_loop_enabled: { label: 'Enable Soothing Loop' },
       soothing_loop_interval_ms: { label: 'Soothing Loop Interval (ms)' },
-      soothing_loop_max_count: { label: 'Soothing Loop Max Count' },
     },
   },
   config: {
@@ -130,7 +128,6 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const sentenceSplitDelimiters = account.sentence_split_delimiters ?? DEFAULT_SENTENCE_SPLIT_DELIMITERS
       const soothingLoopEnabled = account.soothing_loop_enabled ?? DEFAULT_SOOTHING_LOOP_ENABLED
       const soothingLoopIntervalMs = account.soothing_loop_interval_ms ?? DEFAULT_SOOTHING_LOOP_INTERVAL_MS
-      const soothingLoopMaxCount = account.soothing_loop_max_count ?? DEFAULT_SOOTHING_LOOP_MAX_COUNT
 
       client.on('message', (_topic, payload) => {
         let msg: InboundMessage
@@ -189,31 +186,34 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           let firstSentenceFlushed = false
           let llmStarted = false
 
-          // Send soothing replies while waiting for the LLM to start responding.
-          // Once any LLM chunk arrives, stop immediately. Max 5 soothing messages.
-          let soothingTimer: ReturnType<typeof setTimeout> | null = null
-          let soothingCount = 0
+          // Soothing loop: check every 200ms if LLM has started responding.
+          // If not, send a soothing reply at a pace matching TTS playback
+          // (controlled by soothingLoopIntervalMs). Keeps running until LLM
+          // returns its first chunk — no fixed max count.
+          let soothingCheckTimer: ReturnType<typeof setInterval> | null = null
+          let lastSoothingSentAt = 0
           const stopSoothingLoop = () => {
-            if (soothingTimer) { clearTimeout(soothingTimer); soothingTimer = null }
+            if (soothingCheckTimer) { clearInterval(soothingCheckTimer); soothingCheckTimer = null }
           }
-          const resetSoothingTimer = () => {
-            if (!soothingLoopEnabled || llmStarted || soothingCount >= soothingLoopMaxCount) return
-            if (soothingTimer) clearTimeout(soothingTimer)
-            soothingTimer = setTimeout(() => {
-              if (llmStarted || soothingCount >= soothingLoopMaxCount) return
-              soothingCount++
-              order++
-              const extraAck: OutboundMessage = {
-                msgId,
-                identifier: 'chat_output',
-                outParams: { content: soothingPick(), recording_id, order, is_finished: false },
+          if (soothingLoopEnabled) {
+            soothingCheckTimer = setInterval(() => {
+              if (llmStarted) {
+                stopSoothingLoop()
+                return
               }
-              client.publish(outboundTopic, JSON.stringify(extraAck))
-              // Restart timer in case LLM stays silent even longer
-              resetSoothingTimer()
-            }, soothingLoopIntervalMs)
+              const now = Date.now()
+              if (now - lastSoothingSentAt >= soothingLoopIntervalMs) {
+                lastSoothingSentAt = now
+                order++
+                const extraAck: OutboundMessage = {
+                  msgId,
+                  identifier: 'chat_output',
+                  outParams: { content: soothingPick(), recording_id, order, is_finished: false },
+                }
+                client.publish(outboundTopic, JSON.stringify(extraAck))
+              }
+            }, 200)
           }
-          resetSoothingTimer()
 
           // First sentence: split purely by punctuation (fast first response).
           // Subsequent sentences: require a minimum length that grows with each
@@ -347,7 +347,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
               client.publish(outboundTopic, JSON.stringify(outMsg))
             }
           } finally {
-            if (soothingTimer) { clearTimeout(soothingTimer); soothingTimer = null }
+            stopSoothingLoop()
             order++
             const finishMsg: OutboundMessage = {
               msgId,
