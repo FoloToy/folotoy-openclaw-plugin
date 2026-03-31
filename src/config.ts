@@ -45,8 +45,8 @@ export const DEFAULT_SUMMARY_MAX_CHARS = 200
 export const DEFAULT_SENTENCE_SPLIT_ENABLED = true
 export const DEFAULT_SENTENCE_SPLIT_DELIMITERS = '！。？；!.?;~'
 export const DEFAULT_SOOTHING_LOOP_ENABLED = true
-export const DEFAULT_SOOTHING_LOOP_INTERVAL_MS = 200
-export const DEFAULT_SOOTHING_LOOP_MAX_COUNT = 3
+export const DEFAULT_SOOTHING_LOOP_INTERVAL_MS = 8000
+export const DEFAULT_SOOTHING_LOOP_MAX_COUNT = 1
 
 export function flatToPluginConfig(flat: FlatChannelConfig): PluginConfig {
   const flow = flat.flow ?? 'direct'
