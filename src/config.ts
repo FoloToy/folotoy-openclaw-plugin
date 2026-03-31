@@ -37,7 +37,7 @@ export type FlatChannelConfig = {
 }
 
 export const DEFAULT_API_URL = 'https://api.folotoy.cn'
-export const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.qrc92.cn'
+export const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.folotoy.cn'
 export const DEFAULT_MQTT_PORT = 1883
 export const DEFAULT_SUMMARY_ENABLED = true
 export const DEFAULT_SUMMARY_MAX_CHARS = 200
