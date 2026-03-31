@@ -142,16 +142,46 @@ const DEFAULT_CANDIDATES = [
   '让我好好想想...',
 ]
 
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)] as T
+/** Fisher-Yates shuffle (in-place) */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j]!, arr[i]!]
+  }
+  return arr
+}
+
+/**
+ * Creates a soothing reply picker that guarantees no repeats until all
+ * candidates in the matched category are exhausted, then reshuffles.
+ *
+ * Usage:
+ *   const picker = createSoothingPicker(text)
+ *   picker() // first reply (no repeat)
+ *   picker() // second reply (different from first)
+ */
+export function createSoothingPicker(text?: string): () => string {
+  let candidates: string[] | undefined
+  if (text) {
+    for (const rule of INTENT_RULES) {
+      if (rule.pattern.test(text)) {
+        candidates = rule.candidates
+        break
+      }
+    }
+  }
+  const pool = candidates ?? DEFAULT_CANDIDATES
+
+  let queue: string[] = []
+  return () => {
+    if (queue.length === 0) {
+      queue = shuffle([...pool])
+    }
+    return queue.pop()!
+  }
 }
 
 /** Returns one randomly chosen soothing reply matching the input intent. */
-export function pickSoothingReply(text: string): string {
-  for (const rule of INTENT_RULES) {
-    if (rule.pattern.test(text)) {
-      return pickRandom(rule.candidates)
-    }
-  }
-  return pickRandom(DEFAULT_CANDIDATES)
+export function pickSoothingReply(text?: string): string {
+  return createSoothingPicker(text)()
 }

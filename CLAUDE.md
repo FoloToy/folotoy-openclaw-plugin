@@ -33,7 +33,8 @@ folotoy-openclaw-plugin/
     ├── index.ts           # 插件入口，注册 channel，消息处理与摘要逻辑
     ├── mqtt.ts            # MQTT 连接、认证与指数回退重连
     ├── config.ts          # 配置 schema 定义
-    ├── soothing.ts        # 安抚回复（收到消息后立即发送的过渡语）
+    ├── soothing.ts        # 安抚回复（收到消息后立即发送的过渡语，支持不重复 picker）
+    ├── strip-markdown.ts  # Markdown 格式清理（流式 chunk 安全）
     └── cli/
         └── install.ts     # 交互式安装脚本（扫码配对 → 写入配置 → 重启 gateway）
 ```
@@ -46,7 +47,7 @@ FoloToy 玩具  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Thi
 
 插件作为双向桥接：
 - **上行（Inbound）**: 订阅 topic → 接收玩具消息 → 转发给 OpenClaw
-- **下行（Outbound）**: 接收 OpenClaw 响应 → 缓冲全部回复 → 超长时自动摘要 → 发布到 topic
+- **下行（Outbound）**: 接收 OpenClaw 响应 → 按标点分句流式发送 → 超长时自动摘要 → 发布到 topic
 
 ## Authentication
 
@@ -114,7 +115,32 @@ MQTT password: {toy_key}
 
 ### 插件 → 玩具（下行）
 
-回复先缓冲全部内容，超过 `summary_max_chars` 时自动生成摘要。`order` 从 1 开始自增（order=1 为安抚回复），最后发送 `is_finished: true` 的结束消息：
+回复按标点符号（`！。？；!.?;~`）分句流式发送，每个句子作为独立的 `chat_output` 消息。`order` 从 1 开始自增（order=1 为安抚回复），最后发送 `is_finished: true` 的结束消息。
+
+#### 分句策略
+
+- **第 1 句**：遇到标点即切分，保证最快首句响应
+- **第 2 句起**：要求最小长度 20 字，之后每句 +10 字（20 → 30 → 40 → ...），上限 100 字
+- 无标点长文本兜底：buffer 超过 200 字仍无标点时强制切分，优先在空格或逗号处断开
+- 在最后一个标点之后的剩余文本作为最后一条内容消息发送
+- 可通过 `sentence_split_enabled` 关闭分句，回退为整段发送；`sentence_split_delimiters` 可自定义分句标点
+
+#### 安抚回复
+
+- 收到玩具消息后**立即**发送一条安抚语（order=1）
+- 在等待 LLM 开始返回内容期间，每当沉默超过配置间隔（默认 200ms）就发送一条安抚语，LLM 一旦开始返回 chunk 立即停止
+- 安抚语最大次数可配置（默认 3 次）
+- 同一消息内安抚语不重复（shuffle 后顺序选取，用完才 reshuffle）
+- 安抚语根据用户输入意图匹配（如难过、故事、笑话等），无匹配时使用默认候选
+- 可通过 `soothing_loop_enabled` 关闭循环安抚
+
+#### Markdown 清理
+
+所有发送给玩具的文本（下行回复和通知）均经过 markdown 格式清理，去除标题、加粗、斜体、代码块、链接、列表标记、HTML 标签、URL 等，确保 TTS 只读纯文本。同时在 agent prompt 中提示 LLM 使用纯文本回复。
+
+#### 摘要
+
+当总回复长度超过 `summary_max_chars` 时，对最后一个标点之后的剩余文本调用摘要。已流式发送的句子不受影响。
 
 ```json
 {
@@ -184,7 +210,7 @@ MQTT password: {toy_key}
 
 ## Reply Summary
 
-当 AI 回复文本长度超过配置的字符上限时，插件会调用 primary 模型生成摘要后再发送给玩具，避免语音播放时间过长。
+当 AI 回复总长度超过配置的字符上限时，插件会对最后一段剩余文本（最后一个标点之后的部分）调用 primary 模型生成摘要，已流式发送的句子不受影响。
 
 - 摘要 prompt 与 OpenClaw 内置 TTS `summarizeText` 保持一致
 - 摘要失败时回退为截断（`text.slice(0, maxChars - 3) + "..."`）
@@ -221,6 +247,17 @@ mqtt:
 summary:
   summary_enabled: true   # 是否开启摘要（默认 true）
   summary_max_chars: 200  # 触发摘要的字符上限（默认 200）
+
+# 分句流式发送
+sentence:
+  sentence_split_enabled: true         # 是否启用标点分句（默认 true）
+  sentence_split_delimiters: "！。？；!.?;~"  # 分句标点符号集合
+
+# 循环安抚语
+soothing:
+  soothing_loop_enabled: true          # 是否启用循环安抚语（默认 true）
+  soothing_loop_interval_ms: 200       # 安抚语超时间隔，毫秒（默认 200）
+  soothing_loop_max_count: 3           # 安抚语最大次数（默认 3）
 ```
 
 ## Environments
