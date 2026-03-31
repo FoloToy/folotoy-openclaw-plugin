@@ -1,7 +1,8 @@
 import type { OpenClawPluginApi, ChannelPlugin, PluginRuntime } from 'openclaw/plugin-sdk/core'
 import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
-import { pickSoothingReply } from './soothing.js'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, flatToPluginConfig } from './config.js'
+import { createSoothingPicker } from './soothing.js'
+import { stripMarkdown } from './strip-markdown.js'
+import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, DEFAULT_SOOTHING_LOOP_INTERVAL_MS, DEFAULT_SOOTHING_LOOP_MAX_COUNT, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
 
@@ -54,6 +55,11 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         mqtt_port: { type: 'number', default: DEFAULT_MQTT_PORT },
         summary_enabled: { type: 'boolean', default: DEFAULT_SUMMARY_ENABLED },
         summary_max_chars: { type: 'number', default: DEFAULT_SUMMARY_MAX_CHARS },
+        sentence_split_enabled: { type: 'boolean', default: DEFAULT_SENTENCE_SPLIT_ENABLED },
+        sentence_split_delimiters: { type: 'string', default: DEFAULT_SENTENCE_SPLIT_DELIMITERS },
+        soothing_loop_enabled: { type: 'boolean', default: DEFAULT_SOOTHING_LOOP_ENABLED },
+        soothing_loop_interval_ms: { type: 'number', default: DEFAULT_SOOTHING_LOOP_INTERVAL_MS },
+        soothing_loop_max_count: { type: 'number', default: DEFAULT_SOOTHING_LOOP_MAX_COUNT },
       },
     },
     uiHints: {
@@ -66,6 +72,11 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       mqtt_port: { label: 'MQTT Port' },
       summary_enabled: { label: 'Enable Summary' },
       summary_max_chars: { label: 'Summary Max Characters' },
+      sentence_split_enabled: { label: 'Enable Sentence Splitting' },
+      sentence_split_delimiters: { label: 'Sentence Delimiters' },
+      soothing_loop_enabled: { label: 'Enable Soothing Loop' },
+      soothing_loop_interval_ms: { label: 'Soothing Loop Interval (ms)' },
+      soothing_loop_max_count: { label: 'Soothing Loop Max Count' },
     },
   },
   config: {
@@ -115,6 +126,11 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
 
       const summaryEnabled = account.summary_enabled ?? DEFAULT_SUMMARY_ENABLED
       const summaryMaxChars = account.summary_max_chars ?? DEFAULT_SUMMARY_MAX_CHARS
+      const sentenceSplitEnabled = account.sentence_split_enabled ?? DEFAULT_SENTENCE_SPLIT_ENABLED
+      const sentenceSplitDelimiters = account.sentence_split_delimiters ?? DEFAULT_SENTENCE_SPLIT_DELIMITERS
+      const soothingLoopEnabled = account.soothing_loop_enabled ?? DEFAULT_SOOTHING_LOOP_ENABLED
+      const soothingLoopIntervalMs = account.soothing_loop_interval_ms ?? DEFAULT_SOOTHING_LOOP_INTERVAL_MS
+      const soothingLoopMaxCount = account.soothing_loop_max_count ?? DEFAULT_SOOTHING_LOOP_MAX_COUNT
 
       client.on('message', (_topic, payload) => {
         let msg: InboundMessage
@@ -128,12 +144,15 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         const { msgId, inputParams: { text, recording_id } } = msg
         let order = 1
 
+        // Create a per-message picker that cycles through candidates without repeats
+        const soothingPick = createSoothingPicker(text)
+
         // Send a quick soothing acknowledgment before AI processing (order=1).
         // AI replies continue from order=2.
         const ackMsg: OutboundMessage = {
           msgId,
           identifier: 'chat_output',
-          outParams: { content: pickSoothingReply(text), recording_id, order, is_finished: false },
+          outParams: { content: soothingPick(), recording_id, order, is_finished: false },
         }
         client.publish(outboundTopic, JSON.stringify(ackMsg))
 
@@ -160,12 +179,113 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
 
         // dispatch using dispatchReplyFromConfig (full agent capabilities including tools)
         void (async () => {
-          const replyChunks: string[] = []
+          // Sentence-level streaming: buffer incoming text and flush complete
+          // sentences (delimited by punctuation) to the toy immediately.
+          const sentenceDelimiterRe = sentenceSplitEnabled
+            ? new RegExp(`[${sentenceSplitDelimiters.replace(/[-[\]/{}()*+?.\\^$|]/g, '\\$&')}]`)
+            : null
+          let sentenceBuffer = ''
+          let totalSentChars = 0
+          let firstSentenceFlushed = false
+          let llmStarted = false
+
+          // Send soothing replies while waiting for the LLM to start responding.
+          // Once any LLM chunk arrives, stop immediately. Max 5 soothing messages.
+          let soothingTimer: ReturnType<typeof setTimeout> | null = null
+          let soothingCount = 0
+          const stopSoothingLoop = () => {
+            if (soothingTimer) { clearTimeout(soothingTimer); soothingTimer = null }
+          }
+          const resetSoothingTimer = () => {
+            if (!soothingLoopEnabled || llmStarted || soothingCount >= soothingLoopMaxCount) return
+            if (soothingTimer) clearTimeout(soothingTimer)
+            soothingTimer = setTimeout(() => {
+              if (llmStarted || soothingCount >= soothingLoopMaxCount) return
+              soothingCount++
+              order++
+              const extraAck: OutboundMessage = {
+                msgId,
+                identifier: 'chat_output',
+                outParams: { content: soothingPick(), recording_id, order, is_finished: false },
+              }
+              client.publish(outboundTopic, JSON.stringify(extraAck))
+              // Restart timer in case LLM stays silent even longer
+              resetSoothingTimer()
+            }, soothingLoopIntervalMs)
+          }
+          resetSoothingTimer()
+
+          // First sentence: split purely by punctuation (fast first response).
+          // Subsequent sentences: require a minimum length that grows with each
+          // sentence (base 20 chars, +10 per sentence), so later chunks are longer.
+          let sentenceCount = 0
+          const minLenForSentence = () => {
+            if (sentenceCount === 0) return 0 // first sentence: no minimum
+            return Math.min(100, 20 + (sentenceCount - 1) * 10)
+          }
+
+          const FORCE_FLUSH_LEN = 200 // force flush if buffer has no delimiter for this many chars
+
+          const publishSentence = (sentence: string) => {
+            sentenceCount++
+            if (!firstSentenceFlushed) firstSentenceFlushed = true
+            order++
+            totalSentChars += sentence.length
+            const outMsg: OutboundMessage = {
+              msgId,
+              identifier: 'chat_output',
+              outParams: { content: sentence, recording_id, order, is_finished: false },
+            }
+            client.publish(outboundTopic, JSON.stringify(outMsg))
+          }
+
+          const flushSentences = () => {
+            if (!sentenceDelimiterRe) return
+            while (true) {
+              const minLen = minLenForSentence()
+              // Search for a delimiter that is at or beyond the minimum length
+              let idx = -1
+              const searchFrom = Math.max(0, minLen - 1)
+              if (searchFrom < sentenceBuffer.length) {
+                const sub = sentenceBuffer.slice(searchFrom)
+                const match = sub.search(sentenceDelimiterRe)
+                if (match !== -1) idx = searchFrom + match
+              }
+              if (idx !== -1) {
+                const sentence = sentenceBuffer.slice(0, idx + 1).trim()
+                sentenceBuffer = sentenceBuffer.slice(idx + 1)
+                if (sentence) publishSentence(sentence)
+                continue
+              }
+              // No delimiter found — force flush if buffer exceeds limit
+              if (sentenceBuffer.length >= FORCE_FLUSH_LEN) {
+                // Try to break at the last space/comma for a cleaner cut
+                let cutIdx = FORCE_FLUSH_LEN
+                const lastSpace = sentenceBuffer.lastIndexOf(' ', FORCE_FLUSH_LEN)
+                const lastComma = sentenceBuffer.lastIndexOf('，', FORCE_FLUSH_LEN)
+                const lastBreak = Math.max(lastSpace, lastComma)
+                if (lastBreak > FORCE_FLUSH_LEN / 2) cutIdx = lastBreak + 1
+                const sentence = sentenceBuffer.slice(0, cutIdx).trim()
+                sentenceBuffer = sentenceBuffer.slice(cutIdx)
+                if (sentence) publishSentence(sentence)
+                continue
+              }
+              break
+            }
+          }
+
           const dispatcher = {
             sendToolResult: () => true,
             sendBlockReply: () => true,
             sendFinalReply: (payload: { text?: string }) => {
-              if (payload.text) replyChunks.push(payload.text)
+              if (payload.text) {
+                if (!llmStarted) {
+                  llmStarted = true
+                  stopSoothingLoop()
+                }
+                sentenceBuffer += stripMarkdown(payload.text)
+                flushSentences()
+              }
               return true
             },
             waitForIdle: async () => {},
@@ -183,49 +303,51 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
                 }),
             })
 
-            let finalText = replyChunks.join('')
-
-            // Summarize if enabled and text exceeds threshold
-            if (summaryEnabled && subagent && finalText.length > summaryMaxChars) {
-              try {
-                const sessionKey = `folotoy-summary-${accountId}-${Date.now()}`
-                const { runId } = await subagent.run({
-                  sessionKey,
-                  message: [
-                    `You are an assistant that summarizes texts concisely while keeping the most important information.`,
-                    `Summarize the text to approximately ${summaryMaxChars} characters.`,
-                    `Maintain the original tone and style. Reply only with the summary, without additional explanations.`,
-                    ``,
-                    `<text_to_summarize>`,
-                    finalText,
-                    `</text_to_summarize>`,
-                  ].join('\n'),
-                  deliver: false,
-                })
-                const result = await subagent.waitForRun({ runId, timeoutMs: 30_000 })
-                if (result.status === 'ok') {
-                  const { messages } = await subagent.getSessionMessages({ sessionKey, limit: 1 })
-                  const lastMsg = messages[messages.length - 1] as { content?: string; text?: string } | undefined
-                  const summaryText = lastMsg?.content ?? lastMsg?.text
-                  if (summaryText) finalText = summaryText
+            // Flush remaining buffer (text after the last punctuation)
+            let remaining = sentenceBuffer.trim()
+            if (remaining) {
+              // Summarize remaining text if enabled and total response exceeds threshold
+              if (summaryEnabled && subagent && (totalSentChars + remaining.length) > summaryMaxChars) {
+                try {
+                  const summarySessionKey = `folotoy-summary-${accountId}-${Date.now()}`
+                  const { runId } = await subagent.run({
+                    sessionKey: summarySessionKey,
+                    message: [
+                      `You are an assistant that summarizes texts concisely while keeping the most important information.`,
+                      `Summarize the text to approximately ${Math.max(50, summaryMaxChars - totalSentChars)} characters.`,
+                      `Maintain the original tone and style. Reply only with the summary, without additional explanations.`,
+                      ``,
+                      `<text_to_summarize>`,
+                      remaining,
+                      `</text_to_summarize>`,
+                    ].join('\n'),
+                    deliver: false,
+                  })
+                  const result = await subagent.waitForRun({ runId, timeoutMs: 30_000 })
+                  if (result.status === 'ok') {
+                    const { messages } = await subagent.getSessionMessages({ sessionKey: summarySessionKey, limit: 1 })
+                    const lastMsg = messages[messages.length - 1] as { content?: string; text?: string } | undefined
+                    const summaryText = lastMsg?.content ?? lastMsg?.text
+                    if (summaryText) remaining = summaryText
+                  }
+                  await subagent.deleteSession({ sessionKey: summarySessionKey }).catch(() => {})
+                } catch (err) {
+                  log?.warn?.(`Summary failed, truncating text: ${String(err)}`)
+                  const maxRemaining = Math.max(50, summaryMaxChars - totalSentChars)
+                  remaining = `${remaining.slice(0, maxRemaining - 3)}...`
                 }
-                await subagent.deleteSession({ sessionKey }).catch(() => {})
-              } catch (err) {
-                log?.warn?.(`Summary failed, truncating text: ${String(err)}`)
-                finalText = `${finalText.slice(0, summaryMaxChars - 3)}...`
               }
-            }
 
-            if (finalText) {
               order++
               const outMsg: OutboundMessage = {
                 msgId,
                 identifier: 'chat_output',
-                outParams: { content: finalText, recording_id, order, is_finished: false },
+                outParams: { content: remaining, recording_id, order, is_finished: false },
               }
               client.publish(outboundTopic, JSON.stringify(outMsg))
             }
           } finally {
+            if (soothingTimer) { clearTimeout(soothingTimer); soothingTimer = null }
             order++
             const finishMsg: OutboundMessage = {
               msgId,
@@ -268,7 +390,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const pad = (n: number) => String(n).padStart(2, '0')
       const nowLocal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${tzSuffix}`
       return [
-        `[FoloToy] This message is from a FoloToy toy (SN: ${sn}). Current time: ${nowLocal} (${tz}).`,
+        `[FoloToy] This message is from a FoloToy toy (SN: ${sn}). Current time: ${nowLocal} (${tz}). IMPORTANT: Your reply will be converted to speech (TTS). Use plain text only — no markdown, no bullet points, no numbered lists, no code blocks, no URLs. Write in a natural, conversational tone.`,
         [
           `To set reminders/timers, use the cron tool with action="add". IMPORTANT:`,
           `- schedule.at MUST use the same timezone offset as current time (${tzSuffix}), NEVER use "Z"`,
@@ -309,7 +431,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const notifMsg: NotificationMessage = {
         msgId,
         identifier: 'send_notification',
-        outParams: { text },
+        outParams: { text: stripMarkdown(text) },
       }
       entry.client.publish(notificationTopic, JSON.stringify(notifMsg))
       return { channel: 'folotoy', messageId: String(msgId) }
@@ -327,7 +449,7 @@ export function sendNotification({ text, accountId }: { text: string; accountId?
   const notifMsg: NotificationMessage = {
     msgId,
     identifier: 'send_notification',
-    outParams: { text },
+    outParams: { text: stripMarkdown(text) },
   }
   entry.client.publish(notificationTopic, JSON.stringify(notifMsg))
   return { channel: 'folotoy', messageId: String(msgId) }
