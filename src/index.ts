@@ -2,7 +2,7 @@ import type { OpenClawPluginApi, ChannelPlugin, PluginRuntime } from 'openclaw/p
 import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
 import { createSoothingPicker } from './soothing.js'
 import { stripMarkdown } from './strip-markdown.js'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, DEFAULT_SOOTHING_LOOP_INTERVAL_MS, flatToPluginConfig } from './config.js'
+import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
 import type { MqttClient } from 'mqtt'
 
@@ -26,6 +26,46 @@ type NotificationMessage = {
 
 // Per-account MQTT clients and msgId counters
 const activeClients = new Map<string, { client: MqttClient; toy_sn: string; nextMsgId: number }>()
+
+/**
+ * Tracks LLM first-chunk latency (ms) using a sliding window.
+ * Used to dynamically adjust soothing loop interval so that soothing
+ * messages are evenly spaced across the expected wait time.
+ */
+class LatencyTracker {
+  private samples: number[] = []
+  private readonly maxSamples: number
+  private readonly defaultMs: number
+
+  constructor(maxSamples = 20, defaultMs = 5000) {
+    this.maxSamples = maxSamples
+    this.defaultMs = defaultMs
+  }
+
+  record(ms: number) {
+    this.samples.push(ms)
+    if (this.samples.length > this.maxSamples) this.samples.shift()
+  }
+
+  /** Returns the median latency, or the default if no samples yet. */
+  estimate(): number {
+    if (this.samples.length === 0) return this.defaultMs
+    const sorted = [...this.samples].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1]! + sorted[mid]!) / 2
+      : sorted[mid]!
+  }
+}
+
+const latencyTracker = new LatencyTracker()
+
+/** Minimum interval between soothing messages (ms) — TTS needs time to play */
+const MIN_SOOTHING_INTERVAL_MS = 2000
+/** Maximum interval between soothing messages (ms) */
+const MAX_SOOTHING_INTERVAL_MS = 8000
+/** How many soothing candidates to plan for when calculating interval */
+const SOOTHING_CANDIDATES_COUNT = 12
 
 // Subagent reference, set at plugin registration
 let subagent: PluginRuntime['subagent'] | undefined
@@ -58,7 +98,6 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
         sentence_split_enabled: { type: 'boolean', default: DEFAULT_SENTENCE_SPLIT_ENABLED },
         sentence_split_delimiters: { type: 'string', default: DEFAULT_SENTENCE_SPLIT_DELIMITERS },
         soothing_loop_enabled: { type: 'boolean', default: DEFAULT_SOOTHING_LOOP_ENABLED },
-        soothing_loop_interval_ms: { type: 'number', default: DEFAULT_SOOTHING_LOOP_INTERVAL_MS },
       },
     },
     uiHints: {
@@ -74,7 +113,6 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       sentence_split_enabled: { label: 'Enable Sentence Splitting' },
       sentence_split_delimiters: { label: 'Sentence Delimiters' },
       soothing_loop_enabled: { label: 'Enable Soothing Loop' },
-      soothing_loop_interval_ms: { label: 'Soothing Loop Interval (ms)' },
     },
   },
   config: {
@@ -127,7 +165,6 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
       const sentenceSplitEnabled = account.sentence_split_enabled ?? DEFAULT_SENTENCE_SPLIT_ENABLED
       const sentenceSplitDelimiters = account.sentence_split_delimiters ?? DEFAULT_SENTENCE_SPLIT_DELIMITERS
       const soothingLoopEnabled = account.soothing_loop_enabled ?? DEFAULT_SOOTHING_LOOP_ENABLED
-      const soothingLoopIntervalMs = account.soothing_loop_interval_ms ?? DEFAULT_SOOTHING_LOOP_INTERVAL_MS
 
       client.on('message', (_topic, payload) => {
         let msg: InboundMessage
@@ -187,11 +224,16 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
           let llmStarted = false
 
           // Soothing loop: check every 200ms if LLM has started responding.
-          // If not, send a soothing reply at a pace matching TTS playback
-          // (controlled by soothingLoopIntervalMs). Keeps running until LLM
-          // returns its first chunk — no fixed max count.
+          // If not, send a soothing reply at a dynamically calculated interval
+          // based on historical LLM latency. Keeps running until LLM returns
+          // its first chunk — no fixed max count.
           let soothingCheckTimer: ReturnType<typeof setInterval> | null = null
           let lastSoothingSentAt = 0
+          const soothingIntervalMs = Math.max(
+            MIN_SOOTHING_INTERVAL_MS,
+            Math.min(MAX_SOOTHING_INTERVAL_MS, Math.round(latencyTracker.estimate() / SOOTHING_CANDIDATES_COUNT)),
+          )
+          const messageStartTime = Date.now()
           const stopSoothingLoop = () => {
             if (soothingCheckTimer) { clearInterval(soothingCheckTimer); soothingCheckTimer = null }
           }
@@ -202,7 +244,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
                 return
               }
               const now = Date.now()
-              if (now - lastSoothingSentAt >= soothingLoopIntervalMs) {
+              if (now - lastSoothingSentAt >= soothingIntervalMs) {
                 lastSoothingSentAt = now
                 order++
                 const extraAck: OutboundMessage = {
@@ -282,6 +324,7 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
                 if (!llmStarted) {
                   llmStarted = true
                   stopSoothingLoop()
+                  latencyTracker.record(Date.now() - messageStartTime)
                 }
                 sentenceBuffer += stripMarkdown(payload.text)
                 flushSentences()
