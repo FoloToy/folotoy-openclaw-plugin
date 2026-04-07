@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { pickSoothingReply } from '../soothing.js'
+import { pickSoothingReply, _isEnglish } from '../soothing.js'
 
-const CATEGORIES = [
+const ZH_CATEGORIES = [
   { input: '我今天好难过', label: '难过类' },
   { input: '我很生气', label: '生气类' },
   { input: '我好累', label: '累/怕类' },
@@ -17,15 +17,30 @@ const CATEGORIES = [
   { input: '随便说点什么', label: '兜底' },
 ]
 
-describe('pickSoothingReply', () => {
-  it.each(CATEGORIES)('$label — returns a non-empty string', ({ input }) => {
+const EN_CATEGORIES = [
+  { input: "I'm feeling sad today", label: 'sad' },
+  { input: "I'm so angry", label: 'angry' },
+  { input: "I'm really tired", label: 'tired' },
+  { input: 'Tell me a story', label: 'story' },
+  { input: 'Sing me a song', label: 'sing' },
+  { input: 'Tell me a joke', label: 'joke' },
+  { input: 'Why is the sky blue', label: 'why' },
+  { input: 'What happens next', label: 'continue' },
+  { input: 'Hello there', label: 'greeting' },
+  { input: 'Goodbye', label: 'farewell' },
+  { input: 'Connect to wifi', label: 'network' },
+  { input: 'Search the weather', label: 'search' },
+  { input: 'Just say something', label: 'default' },
+]
+
+describe('pickSoothingReply — Chinese', () => {
+  it.each(ZH_CATEGORIES)('$label — returns a non-empty string', ({ input }) => {
     const reply = pickSoothingReply(input)
     expect(typeof reply).toBe('string')
     expect(reply.length).toBeGreaterThan(0)
   })
 
-  it.each(CATEGORIES)('$label — never contains 马上', ({ input }) => {
-    // Run multiple times to cover random selection
+  it.each(ZH_CATEGORIES)('$label — never contains 马上', ({ input }) => {
     for (let i = 0; i < 20; i++) {
       expect(pickSoothingReply(input)).not.toContain('马上')
     }
@@ -33,7 +48,7 @@ describe('pickSoothingReply', () => {
 
   it('randomly selects from candidates (not always the same reply)', () => {
     const results = new Set(
-      Array.from({ length: 40 }, () => pickSoothingReply('我今天好难过'))
+      Array.from({ length: 50 }, () => pickSoothingReply('我今天好难过'))
     )
     expect(results.size).toBeGreaterThan(1)
   })
@@ -43,5 +58,53 @@ describe('pickSoothingReply', () => {
     for (let i = 0; i < 20; i++) {
       expect(allowed.has(pickSoothingReply('晚安'))).toBe(true)
     }
+  })
+})
+
+describe('pickSoothingReply — English', () => {
+  it.each(EN_CATEGORIES)('$label — returns a non-empty English string', ({ input }) => {
+    const reply = pickSoothingReply(input)
+    expect(typeof reply).toBe('string')
+    expect(reply.length).toBeGreaterThan(0)
+    // Should contain Latin characters (English response)
+    expect(reply).toMatch(/[a-zA-Z]/)
+  })
+
+  it('randomly selects from English candidates', () => {
+    const results = new Set(
+      Array.from({ length: 50 }, () => pickSoothingReply("I'm feeling sad today"))
+    )
+    expect(results.size).toBeGreaterThan(1)
+  })
+
+  it('farewell returns only short English affirmatives', () => {
+    const allowed = new Set(['Alright~', 'Okay~', 'Sure~', 'Bye bye~', 'See you~'])
+    for (let i = 0; i < 20; i++) {
+      expect(allowed.has(pickSoothingReply('Goodbye'))).toBe(true)
+    }
+  })
+})
+
+describe('isEnglish', () => {
+  it('detects Chinese text', () => {
+    expect(_isEnglish('我今天好难过')).toBe(false)
+    expect(_isEnglish('你好')).toBe(false)
+    expect(_isEnglish('帮我查天气')).toBe(false)
+  })
+
+  it('detects English text', () => {
+    expect(_isEnglish('Hello there')).toBe(true)
+    expect(_isEnglish("I'm feeling sad")).toBe(true)
+    expect(_isEnglish('Tell me a story')).toBe(true)
+  })
+
+  it('handles mixed text — majority wins', () => {
+    expect(_isEnglish('帮我连接wifi')).toBe(false) // mostly Chinese
+    expect(_isEnglish('Please help 谢谢')).toBe(true) // mostly English
+  })
+
+  it('returns false for empty or symbol-only text', () => {
+    expect(_isEnglish('')).toBe(false)
+    expect(_isEnglish('123!@#')).toBe(false)
   })
 })
