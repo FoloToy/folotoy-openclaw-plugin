@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process'
 import qrcode from 'qrcode-terminal'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from '../config.js'
-import { getInstallSpec } from './package-info.js'
+import { getInstallSpec, getPluginName } from './package-info.js'
 import { loadPreset, listPresets, type Preset } from './preset.js'
 
 const PAIR_API_BASE = process.env.PAIR_API_BASE ?? 'https://pair.folotoy.cn'
@@ -141,7 +141,7 @@ async function main() {
 
   if (command !== 'install') {
     const presets = listPresets()
-    console.log('Usage: npx @folotoy/folotoy-openclaw-plugin install [--preset <name>]')
+    console.log(`Usage: npx ${getPluginName()} install [--preset <name>]`)
     if (presets.length) console.log(`Available presets: ${presets.join(', ')}`)
     process.exit(command ? 1 : 0)
   }
