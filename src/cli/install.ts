@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process'
 import qrcode from 'qrcode-terminal'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from '../config.js'
+import { getInstallSpec } from './package-info.js'
 import { loadPreset, listPresets, type Preset } from './preset.js'
 
 const PAIR_API_BASE = process.env.PAIR_API_BASE ?? 'https://pair.folotoy.cn'
@@ -41,8 +42,9 @@ function installPlugin(): void {
   } catch {
     // ignore
   }
-  console.log('Installing FoloToy plugin...')
-  execSync('openclaw plugins install @folotoy/folotoy-openclaw-plugin', { stdio: 'inherit' })
+  const spec = getInstallSpec()
+  console.log(`Installing FoloToy plugin (${spec})...`)
+  execSync(`openclaw plugins install ${spec}`, { stdio: 'inherit' })
 }
 
 async function createSession(): Promise<CreateSessionResponse> {

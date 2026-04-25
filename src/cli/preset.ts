@@ -1,20 +1,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { findPackageRoot } from './package-info.js'
 
 export const PRESET_WHITELIST = ['soothing_loop_enabled'] as const
 export type PresetKey = (typeof PRESET_WHITELIST)[number]
 export type Preset = Partial<Record<PresetKey, boolean>>
-
-function findPackageRoot(): string {
-  let dir = dirname(fileURLToPath(import.meta.url))
-  while (true) {
-    if (existsSync(join(dir, 'package.json'))) return dir
-    const parent = dirname(dir)
-    if (parent === dir) throw new Error('package.json not found while resolving preset directory')
-    dir = parent
-  }
-}
 
 function presetDir(): string {
   return join(findPackageRoot(), 'src', 'presets')
