@@ -49,6 +49,18 @@ FoloToy 玩具  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Thi
 - **上行（Inbound）**: 订阅 topic → 接收玩具消息 → 转发给 OpenClaw
 - **下行（Outbound）**: 接收 OpenClaw 响应 → 按标点分句流式发送 → 超长时自动摘要 → 发布到 topic
 
+### OpenClaw 集成
+
+`src/index.ts` 默认导出一个 `ChannelPlugin<FlatChannelConfig>` 对象，由 OpenClaw 插件 SDK 加载：
+
+- `id: 'folotoy'` — channel id，配置写在 `openclaw.json` 的 `channels.folotoy` 下
+- `configSchema.schema` — JSON Schema，决定哪些字段会出现在 OpenClaw UI；`uiHints` 提供字段标签和 `sensitive: true` 标记
+- `config.listAccountIds` / `resolveAccount` / `resolveAllowFrom` — 账户解析（当前固定单账户 `'default'`，allowFrom 为 toy_sn）
+- `gateway.startAccount(ctx)` — 生命周期入口：建立 MQTT 连接、订阅上行 topic、对每条 `chat_input` 调用 `channelRuntime.reply.finalizeInboundContext` + `dispatchReplyFromConfig`，把 LLM chunk 流式发回玩具
+- `outbound.sendText` — OpenClaw 主动通知入口：通过 `openclaw agent --deliver --reply-channel folotoy --reply-to <sn>` 触发，发布到 `event/post` topic
+
+每个账户在 `activeClients` Map 中持有 `{ client, toy_sn, nextMsgId }`；`msgId` 单调递增、按账户隔离。
+
 ## Authentication
 
 支持两种认证流程，**默认使用 Flow 2**：
@@ -127,12 +139,11 @@ MQTT password: {toy_key}
 
 #### 安抚回复
 
-- 收到玩具消息后**立即**发送一条安抚语（order=1）
-- 在等待 LLM 开始返回内容期间，每当沉默超过配置间隔（默认 200ms）就发送一条安抚语，LLM 一旦开始返回 chunk 立即停止
-- 安抚语最大次数可配置（默认 3 次）
+- 收到玩具消息后**立即**发送一条安抚语（order=1），这条**无条件发送**，不受 `soothing_loop_enabled` 控制
+- `soothing_loop_enabled=true` 时，在等待 LLM 首个 chunk 期间每隔 `soothing_loop_interval_ms`（默认 3000ms）补发一条安抚语，LLM 一旦开始返回内容立即停止；**没有最大次数限制**
+- `soothing_loop_enabled=false` 时只发那条 order=1 的安抚语，等待期不再补发
 - 同一消息内安抚语不重复（shuffle 后顺序选取，用完才 reshuffle）
 - 安抚语根据用户输入意图匹配（如难过、故事、笑话等），无匹配时使用默认候选
-- 可通过 `soothing_loop_enabled` 关闭循环安抚
 
 #### Markdown 清理
 
@@ -208,6 +219,15 @@ MQTT password: {toy_key}
 
 配对 API 默认地址：`https://pair.folotoy.com`，可通过 `PAIR_API_BASE` 环境变量覆盖（用于本地测试）。
 
+### `--preset <name>`
+
+`npx ... install --preset <name>` 选择一份随包发布的命名预设，把额外的字段写进 `channels.folotoy.*`。预设 JSON 放在 `src/presets/`，运行时通过 `findPackageRoot()` 从 `package.json` 反查根目录加载（兼容 src/dist 两种运行模式）。
+
+- 当前白名单只有 `soothing_loop_enabled`（boolean）；未知 key 或类型错都 fail-fast，扫码前就退出
+- 已发布预设：`single-soothing`（关闭安抚语循环补发，只发 order=1 那条初始安抚语）
+- `parsePresetArg` 同时支持 `--preset name` 和 `--preset=name`
+- 不传 `--preset` 时行为与历史完全一致——不写任何 soothing 字段，沿用 `DEFAULT_*`
+
 ## Reply Summary
 
 当 AI 回复总长度超过配置的字符上限时，插件会对最后一段剩余文本（最后一个标点之后的部分）调用 primary 模型生成摘要，已流式发送的句子不受影响。
@@ -253,11 +273,10 @@ sentence:
   sentence_split_enabled: true         # 是否启用标点分句（默认 true）
   sentence_split_delimiters: "！。？；!.?;~"  # 分句标点符号集合
 
-# 循环安抚语
+# 循环安抚语（仅控制等待 LLM 期间的补发；初始那条 order=1 安抚语始终发送）
 soothing:
   soothing_loop_enabled: true          # 是否启用循环安抚语（默认 true）
-  soothing_loop_interval_ms: 200       # 安抚语超时间隔，毫秒（默认 200）
-  soothing_loop_max_count: 3           # 安抚语最大次数（默认 3）
+  soothing_loop_interval_ms: 3000      # 等待期补发间隔，毫秒（默认 3000）
 ```
 
 ## Environments

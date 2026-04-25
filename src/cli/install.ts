@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process'
 import qrcode from 'qrcode-terminal'
 import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from '../config.js'
+import { loadPreset, listPresets, type Preset } from './preset.js'
 
 const PAIR_API_BASE = process.env.PAIR_API_BASE ?? 'https://pair.folotoy.cn'
 const POLL_INTERVAL_MS = 3000
@@ -95,7 +96,10 @@ function restartGateway(): void {
   }
 }
 
-function writeConfig(result: { toy_sn: string; toy_key: string; mqtt_host?: string; mqtt_port?: number }): void {
+function writeConfig(
+  result: { toy_sn: string; toy_key: string; mqtt_host?: string; mqtt_port?: number },
+  preset: Preset = {},
+): void {
   execSync(`openclaw config set channels.folotoy.flow direct`, { stdio: 'pipe' })
   execSync(`openclaw config set channels.folotoy.toy_sn ${result.toy_sn}`, { stdio: 'pipe' })
   execSync(`openclaw config set channels.folotoy.toy_key ${result.toy_key}`, { stdio: 'pipe' })
@@ -104,19 +108,51 @@ function writeConfig(result: { toy_sn: string; toy_key: string; mqtt_host?: stri
   const mqttPort = result.mqtt_port ?? DEFAULT_MQTT_PORT
   execSync(`openclaw config set channels.folotoy.mqtt_host ${mqttHost}`, { stdio: 'pipe' })
   execSync(`openclaw config set channels.folotoy.mqtt_port ${mqttPort}`, { stdio: 'pipe' })
+
+  for (const [key, value] of Object.entries(preset)) {
+    execSync(`openclaw config set channels.folotoy.${key} ${value}`, { stdio: 'pipe' })
+  }
+}
+
+function parsePresetArg(argv: readonly string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--preset') {
+      const value = argv[i + 1]
+      if (!value || value.startsWith('--')) {
+        throw new Error('--preset requires a name (e.g. --preset single-soothing)')
+      }
+      return value
+    }
+    if (arg && arg.startsWith('--preset=')) {
+      return arg.slice('--preset='.length)
+    }
+  }
+  return undefined
 }
 
 // ── Main ───────────────────────────────────────────────
 
 async function main() {
-  const command = process.argv[2]
+  const argv = process.argv.slice(2)
+  const command = argv[0]
 
   if (command !== 'install') {
-    console.log('Usage: npx @folotoy/folotoy-openclaw-plugin install')
+    const presets = listPresets()
+    console.log('Usage: npx @folotoy/folotoy-openclaw-plugin install [--preset <name>]')
+    if (presets.length) console.log(`Available presets: ${presets.join(', ')}`)
     process.exit(command ? 1 : 0)
   }
 
+  // Resolve preset before any side effects (pairing, plugin install) so a bad
+  // preset name fails fast without making the user scan a QR.
+  const presetName = parsePresetArg(argv.slice(1))
+  const preset: Preset = presetName ? loadPreset(presetName) : {}
+
   console.log('🧸 FoloToy OpenClaw Plugin Installer\n')
+  if (presetName) {
+    console.log(`Using preset: ${presetName} → ${JSON.stringify(preset)}\n`)
+  }
 
   // Step 1: check prerequisites
   console.log('Checking openclaw...')
@@ -140,7 +176,7 @@ async function main() {
 
   // Step 6: write config
   console.log('\nWriting configuration...')
-  writeConfig(result)
+  writeConfig(result, preset)
 
   // Step 7: restart gateway
   console.log('\nRestarting gateway...')
