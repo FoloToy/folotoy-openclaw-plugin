@@ -116,7 +116,7 @@ async function pairWithRetry(): Promise<PollResponse & { status: 'completed' }> 
       console.log("then scan your toy's QR code on the phone:\n")
     } else {
       console.log(
-        `\n🔄 新二维码已生成，请重新扫描 (${attempt}/${MAX_QR_REFRESH_COUNT})\n`,
+        `\n🔄 New QR code generated, please scan again (${attempt}/${MAX_QR_REFRESH_COUNT})\n`,
       )
     }
     displayQR(session.pair_url)
@@ -128,12 +128,12 @@ async function pairWithRetry(): Promise<PollResponse & { status: 'completed' }> 
       const isExpiry = msg.includes('expired') || msg.includes('timed out')
       if (!isExpiry || attempt === MAX_QR_REFRESH_COUNT) throw err
       console.log(
-        `\n⏳ 二维码已过期，正在刷新... (${attempt}/${MAX_QR_REFRESH_COUNT})`,
+        `\n⏳ QR code expired, refreshing... (${attempt}/${MAX_QR_REFRESH_COUNT})`,
       )
     }
   }
   throw new Error(
-    `登录超时：二维码已过期 ${MAX_QR_REFRESH_COUNT} 次，请重新开始安装流程。`,
+    `Pairing timed out: QR code expired ${MAX_QR_REFRESH_COUNT} times. Please re-run the install command.`,
   )
 }
 
