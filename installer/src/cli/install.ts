@@ -1,8 +1,14 @@
 import { execSync } from 'node:child_process'
 import qrcode from 'qrcode-terminal'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from '../config.js'
 import { getInstallSpec, getPluginName } from './package-info.js'
 import { loadPreset, listPresets, type Preset } from './preset.js'
+
+// MQTT broker defaults — duplicated here (instead of imported from the
+// runtime package) so the installer is self-contained and can be packaged
+// independently. Keep in sync with @folotoy/folotoy-openclaw-plugin's
+// config.ts if the production broker changes.
+const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.folotoy.cn'
+const DEFAULT_MQTT_PORT = 1883
 
 const PAIR_API_BASE = process.env.PAIR_API_BASE ?? 'https://pair.folotoy.cn'
 const POLL_INTERVAL_MS = 3000

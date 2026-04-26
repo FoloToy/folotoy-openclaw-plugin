@@ -6,6 +6,7 @@ import {
   getInstallSpec,
   getPluginName,
   getPluginVersion,
+  getRuntimePluginName,
 } from '../cli/package-info.js'
 
 describe('package-info', () => {
@@ -16,21 +17,27 @@ describe('package-info', () => {
     expect(typeof pkg.version).toBe('string')
   })
 
-  it('getPluginName matches package.json name', () => {
+  it('getPluginName matches the installer package.json name', () => {
     const root = findPackageRoot()
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     expect(getPluginName()).toBe(pkg.name)
   })
 
-  it('getPluginVersion matches package.json version', () => {
+  it('getPluginVersion matches the installer package.json version', () => {
     const root = findPackageRoot()
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     expect(getPluginVersion()).toBe(pkg.version)
   })
 
-  it('getInstallSpec is "<name>@<version>" — pins the exact version so OpenClaw will install prereleases', () => {
-    expect(getInstallSpec()).toBe(`${getPluginName()}@${getPluginVersion()}`)
-    // Sanity: it must contain an `@` separator after the scope's leading `@`.
+  it('getRuntimePluginName matches package.json folotoy.runtimePackage', () => {
+    const root = findPackageRoot()
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    expect(getRuntimePluginName()).toBe(pkg.folotoy.runtimePackage)
+  })
+
+  it('getInstallSpec is "<runtime-name>@<installer-version>" — pins the exact version so OpenClaw will install prereleases', () => {
+    expect(getInstallSpec()).toBe(`${getRuntimePluginName()}@${getPluginVersion()}`)
+    // Sanity: must contain an `@` separator after the scope's leading `@`.
     const spec = getInstallSpec()
     const lastAt = spec.lastIndexOf('@')
     expect(lastAt).toBeGreaterThan(0)
