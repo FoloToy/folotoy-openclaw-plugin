@@ -23,7 +23,11 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "files": [
-    "src",
+    "src/index.ts",
+    "src/mqtt.ts",
+    "src/config.ts",
+    "src/soothing.ts",
+    "src/strip-markdown.ts",
     "dist",
     "openclaw.plugin.json"
   ],
