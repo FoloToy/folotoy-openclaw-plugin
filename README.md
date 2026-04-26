@@ -16,6 +16,19 @@ Interactive install (scan QR code to pair your toy):
 npx @folotoy/folotoy-openclaw-plugin install
 ```
 
+To install with a built-in preset (e.g. send only a single soothing reply
+instead of looping until the LLM responds):
+
+```bash
+npx @folotoy/folotoy-openclaw-plugin install --preset single-soothing
+```
+
+Available presets are bundled in `src/presets/*.json`. Currently:
+
+| Preset | Effect |
+|--------|--------|
+| `single-soothing` | Sets `soothing_loop_enabled = false` so only the initial `order=1` soothing reply is sent; no further soothing replies are emitted while waiting for the LLM. |
+
 Or install manually:
 
 ```bash
