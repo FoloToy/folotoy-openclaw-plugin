@@ -3,10 +3,109 @@
   "name": "FoloToy",
   "description": "Empower your FoloToy with OpenClaw AI capabilities.",
   "version": "0.7.0",
-  "channels": ["folotoy"],
+  "channels": [
+    "folotoy"
+  ],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {}
+  },
+  "channelConfigs": {
+    "folotoy": {
+      "label": "FoloToy",
+      "description": "FoloToy smart toy channel — bridges toys to OpenClaw via MQTT.",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "flow": {
+            "default": "direct",
+            "description": "Auth flow",
+            "type": "string",
+            "enum": [
+              "direct",
+              "api"
+            ]
+          },
+          "toy_sn": {
+            "description": "Toy serial number",
+            "type": "string"
+          },
+          "toy_key": {
+            "description": "Toy key (used as MQTT password in direct flow)",
+            "type": "string"
+          },
+          "api_url": {
+            "default": "https://api.folotoy.cn",
+            "description": "FoloToy API base URL (api flow)",
+            "type": "string"
+          },
+          "api_key": {
+            "description": "FoloToy API key (api flow)",
+            "type": "string"
+          },
+          "mqtt_host": {
+            "default": "f.folotoy.cn",
+            "description": "MQTT broker host",
+            "type": "string"
+          },
+          "mqtt_port": {
+            "default": 1883,
+            "description": "MQTT broker port",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "summary_enabled": {
+            "default": true,
+            "description": "Enable reply summarization for over-long replies",
+            "type": "boolean"
+          },
+          "summary_max_chars": {
+            "default": 200,
+            "description": "Character threshold that triggers summarization",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "sentence_split_enabled": {
+            "default": true,
+            "description": "Stream replies sentence-by-sentence for faster TTS",
+            "type": "boolean"
+          },
+          "sentence_split_delimiters": {
+            "default": "！。？；!.?;~",
+            "description": "Punctuation characters that split sentences",
+            "type": "string"
+          },
+          "soothing_loop_enabled": {
+            "default": true,
+            "description": "Repeat soothing replies while waiting for the LLM. Disable to send only the initial order=1 reply.",
+            "type": "boolean"
+          },
+          "soothing_loop_interval_ms": {
+            "default": 3000,
+            "description": "Interval (ms) between soothing replies during the LLM wait",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "flow",
+          "api_url",
+          "mqtt_host",
+          "mqtt_port",
+          "summary_enabled",
+          "summary_max_chars",
+          "sentence_split_enabled",
+          "sentence_split_delimiters",
+          "soothing_loop_enabled",
+          "soothing_loop_interval_ms"
+        ],
+        "additionalProperties": false
+      }
+    }
   }
 }

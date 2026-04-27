@@ -33,7 +33,7 @@
     "openclaw.plugin.json"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/sync-manifest.mjs",
     "prepublishOnly": "npm run build",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
