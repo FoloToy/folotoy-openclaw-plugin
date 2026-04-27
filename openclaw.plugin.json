@@ -2,51 +2,11 @@
   "id": "folotoy-openclaw-plugin",
   "name": "FoloToy",
   "description": "Empower your FoloToy with OpenClaw AI capabilities.",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "channels": ["folotoy"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {
-      "flow": {
-        "type": "string",
-        "enum": ["direct", "api"],
-        "description": "Authentication flow",
-        "default": "direct"
-      },
-      "toy_sn": {
-        "type": "string",
-        "description": "Toy serial number"
-      },
-      "toy_key": {
-        "type": "string",
-        "description": "Toy key (direct flow)"
-      },
-      "api_url": {
-        "type": "string",
-        "description": "FoloToy API base URL (api flow)"
-      },
-      "api_key": {
-        "type": "string",
-        "description": "FoloToy API key (api flow)"
-      },
-      "mqtt_host": {
-        "type": "string",
-        "description": "MQTT broker host"
-      },
-      "mqtt_port": {
-        "type": "number",
-        "description": "MQTT broker port"
-      }
-    }
-  },
-  "uiHints": {
-    "flow": { "label": "Auth Flow" },
-    "toy_sn": { "label": "Toy SN" },
-    "toy_key": { "label": "Toy Key", "sensitive": true },
-    "api_url": { "label": "API URL", "placeholder": "https://api.folotoy.cn" },
-    "api_key": { "label": "API Key", "sensitive": true },
-    "mqtt_host": { "label": "MQTT Host", "placeholder": "198.19.249.25" },
-    "mqtt_port": { "label": "MQTT Port", "placeholder": "1883" }
+    "properties": {}
   }
 }

@@ -1,9 +1,11 @@
 import type { OpenClawPluginApi, ChannelPlugin, PluginRuntime } from 'openclaw/plugin-sdk/core'
+import { buildChannelConfigSchema } from 'openclaw/plugin-sdk'
 import { resolveCredentials, createMqttClient, buildInboundTopic, buildOutboundTopic, buildNotificationTopic } from './mqtt.js'
 import { createSoothingPicker } from './soothing.js'
 import { stripMarkdown } from './strip-markdown.js'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT, DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, DEFAULT_SOOTHING_LOOP_INTERVAL_MS, flatToPluginConfig } from './config.js'
+import { DEFAULT_SUMMARY_ENABLED, DEFAULT_SUMMARY_MAX_CHARS, DEFAULT_SENTENCE_SPLIT_ENABLED, DEFAULT_SENTENCE_SPLIT_DELIMITERS, DEFAULT_SOOTHING_LOOP_ENABLED, DEFAULT_SOOTHING_LOOP_INTERVAL_MS, flatToPluginConfig } from './config.js'
 import type { FlatChannelConfig } from './config.js'
+import { FolotoyConfigSchema } from './config-schema.js'
 import type { MqttClient } from 'mqtt'
 
 type InboundMessage = {
@@ -42,40 +44,12 @@ const folotoyChannel: ChannelPlugin<FlatChannelConfig> = {
   capabilities: {
     chatTypes: ['direct'],
   },
+  // ChannelPlugin's per-channel configSchema is left empty here on purpose:
+  // the plugin-level configSchema (set on the default-exported plugin object
+  // below) is what OpenClaw 2026.4.x's web UI reads. Mirrors what
+  // openclaw-weixin and other 2026.4.x-compatible plugins do.
   configSchema: {
-    schema: {
-      type: 'object',
-      properties: {
-        flow: { type: 'string', enum: ['direct', 'api'], default: 'direct' },
-        toy_sn: { type: 'string' },
-        toy_key: { type: 'string' },
-        api_url: { type: 'string', default: 'https://api.folotoy.cn' },
-        api_key: { type: 'string' },
-        mqtt_host: { type: 'string', default: DEFAULT_MQTT_HOST },
-        mqtt_port: { type: 'number', default: DEFAULT_MQTT_PORT },
-        summary_enabled: { type: 'boolean', default: DEFAULT_SUMMARY_ENABLED },
-        summary_max_chars: { type: 'number', default: DEFAULT_SUMMARY_MAX_CHARS },
-        sentence_split_enabled: { type: 'boolean', default: DEFAULT_SENTENCE_SPLIT_ENABLED },
-        sentence_split_delimiters: { type: 'string', default: DEFAULT_SENTENCE_SPLIT_DELIMITERS },
-        soothing_loop_enabled: { type: 'boolean', default: DEFAULT_SOOTHING_LOOP_ENABLED },
-        soothing_loop_interval_ms: { type: 'number', default: DEFAULT_SOOTHING_LOOP_INTERVAL_MS },
-      },
-    },
-    uiHints: {
-      flow: { label: 'Auth Flow' },
-      toy_sn: { label: 'Toy SN' },
-      toy_key: { label: 'Toy Key', sensitive: true },
-      api_url: { label: 'API URL', placeholder: 'https://api.folotoy.com' },
-      api_key: { label: 'API Key', sensitive: true },
-      mqtt_host: { label: 'MQTT Host', placeholder: DEFAULT_MQTT_HOST },
-      mqtt_port: { label: 'MQTT Port' },
-      summary_enabled: { label: 'Enable Summary' },
-      summary_max_chars: { label: 'Summary Max Characters' },
-      sentence_split_enabled: { label: 'Enable Sentence Splitting' },
-      sentence_split_delimiters: { label: 'Sentence Delimiters' },
-      soothing_loop_enabled: { label: 'Enable Soothing Loop' },
-      soothing_loop_interval_ms: { label: 'Soothing Loop Interval (ms)' },
-    },
+    schema: { type: 'object', additionalProperties: false, properties: {} },
   },
   config: {
     listAccountIds: (cfg) => {
@@ -455,7 +429,21 @@ export function sendNotification({ text, accountId }: { text: string; accountId?
   return { channel: 'folotoy', messageId: String(msgId) }
 }
 
-export default (api: OpenClawPluginApi) => {
-  subagent = api.runtime.subagent
-  api.registerChannel({ plugin: folotoyChannel })
+/**
+ * Plugin manifest exposed to OpenClaw. Top-level fields (id/name/description/
+ * configSchema) are what the OpenClaw 2026.4.x web UI reads to render the
+ * config form — the per-channel configSchema on `folotoyChannel` above is
+ * intentionally empty so the UI uses this one.
+ */
+const folotoyPlugin = {
+  id: 'folotoy-openclaw-plugin',
+  name: 'FoloToy',
+  description: 'Empower your FoloToy with OpenClaw AI capabilities.',
+  configSchema: buildChannelConfigSchema(FolotoyConfigSchema),
+  register(api: OpenClawPluginApi) {
+    subagent = api.runtime.subagent
+    api.registerChannel({ plugin: folotoyChannel })
+  },
 }
+
+export default folotoyPlugin
