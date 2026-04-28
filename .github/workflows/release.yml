@@ -56,21 +56,29 @@ jobs:
 
       - name: Publish @folotoy/folotoy-openclaw-installer
         working-directory: installer
-        run: npm publish --access public --provenance
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          if curl -fsS "https://registry.npmjs.org/@folotoy/folotoy-openclaw-installer/$VERSION" >/dev/null 2>&1; then
+            echo "installer $VERSION already published, skipping"
+          else
+            npm publish --access public --provenance
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Wait for installer to be available on npm
         run: |
-          for i in {1..30}; do
-            if npm view "@folotoy/folotoy-openclaw-installer@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
-              echo "installer ${{ steps.ver.outputs.version }} is available"
+          VERSION="${{ steps.ver.outputs.version }}"
+          URL="https://registry.npmjs.org/@folotoy/folotoy-openclaw-installer/$VERSION"
+          for i in {1..60}; do
+            if curl -fsS "$URL" >/dev/null 2>&1; then
+              echo "installer $VERSION is available on registry"
               exit 0
             fi
-            echo "waiting for installer to propagate ($i/30)..."
+            echo "waiting for installer to propagate ($i/60)..."
             sleep 5
           done
-          echo "::error::installer ${{ steps.ver.outputs.version }} did not appear on npm after 150s"
+          echo "::error::installer $VERSION did not appear on npm registry after 300s"
           exit 1
 
       - name: Install root deps
@@ -79,7 +87,13 @@ jobs:
       - run: npm test
 
       - name: Publish @folotoy/folotoy-openclaw-plugin
-        run: npm publish --access public --provenance
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          if curl -fsS "https://registry.npmjs.org/@folotoy/folotoy-openclaw-plugin/$VERSION" >/dev/null 2>&1; then
+            echo "plugin $VERSION already published, skipping"
+          else
+            npm publish --access public --provenance
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
