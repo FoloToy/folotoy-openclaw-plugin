@@ -34,7 +34,7 @@ function readPackageInfo(): PackageInfo {
   return cached
 }
 
-/** Returns the installer package's own name (e.g. `@folotoy/folotoy-openclaw-installer`). */
+/** Returns the installer package's own name (e.g. `@folotoy/folotoy-openclaw-plugin`). */
 export function getPluginName(): string {
   return readPackageInfo().name
 }
@@ -46,7 +46,7 @@ export function getPluginVersion(): string {
 
 /**
  * Returns the runtime plugin's npm package name (e.g.
- * `@folotoy/folotoy-openclaw-plugin`), read from this installer's
+ * `@folotoy/folotoy-openclaw-core`), read from this installer's
  * `package.json` `folotoy.runtimePackage` field. Centralising this in
  * package.json keeps scope renames (e.g. `@folotoy` ↔ `@firstsky` for
  * customer-specific RC builds) to a single edit.

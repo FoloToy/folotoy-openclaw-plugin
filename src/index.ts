@@ -436,7 +436,7 @@ export function sendNotification({ text, accountId }: { text: string; accountId?
  * intentionally empty so the UI uses this one.
  */
 const folotoyPlugin = {
-  id: 'folotoy-openclaw-plugin',
+  id: 'folotoy-openclaw-core',
   name: 'FoloToy',
   description: 'Empower your FoloToy with OpenClaw AI capabilities.',
   configSchema: buildChannelConfigSchema(FolotoyConfigSchema),
