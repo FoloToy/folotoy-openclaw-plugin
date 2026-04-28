@@ -5,7 +5,7 @@ import { loadPreset, listPresets, type Preset } from './preset.js'
 
 // MQTT broker defaults — duplicated here (instead of imported from the
 // runtime package) so the installer is self-contained and can be packaged
-// independently. Keep in sync with @folotoy/folotoy-openclaw-plugin's
+// independently. Keep in sync with @folotoy/folotoy-openclaw-core's
 // config.ts if the production broker changes.
 const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.folotoy.cn'
 const DEFAULT_MQTT_PORT = 1883
@@ -43,7 +43,7 @@ function checkOpenClaw(): void {
 function installPlugin(): void {
   try {
     const list = execSync('openclaw plugins list', { stdio: 'pipe' }).toString()
-    if (list.includes('folotoy-openclaw-plugin')) {
+    if (list.includes('folotoy-openclaw-core')) {
       return // already installed
     }
   } catch {

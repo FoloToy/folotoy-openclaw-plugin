@@ -1,16 +1,16 @@
-# @folotoy/folotoy-openclaw-installer
+# @folotoy/folotoy-openclaw-plugin
 
-Interactive installer for [`@folotoy/folotoy-openclaw-plugin`](https://www.npmjs.com/package/@folotoy/folotoy-openclaw-plugin) — generates a pairing QR code, writes the OpenClaw config, restarts the gateway.
+Interactive installer for [`@folotoy/folotoy-openclaw-core`](https://www.npmjs.com/package/@folotoy/folotoy-openclaw-core) — generates a pairing QR code, writes the OpenClaw config, restarts the gateway.
 
 ```bash
-npx -y @folotoy/folotoy-openclaw-installer install [--preset <name>]
+npx -y @folotoy/folotoy-openclaw-plugin install [--preset <name>]
 ```
 
 ## Why a separate package
 
-OpenClaw's plugin security scanner (2026.4.x+) rejects packages that contain `child_process` execution or `process.env` access combined with `fetch()` — patterns that any interactive installer legitimately needs. Splitting the installer out keeps the runtime plugin package (`@folotoy/folotoy-openclaw-plugin`) clean and scanner-passing, while the installer is only ever fetched via `npx` (never via `openclaw plugins install`).
+OpenClaw's plugin security scanner (2026.4.x+) rejects packages that contain `child_process` execution or `process.env` access combined with `fetch()` — patterns that any interactive installer legitimately needs. Splitting the installer out keeps the runtime channel package (`@folotoy/folotoy-openclaw-core`) clean and scanner-passing, while this CLI package is only ever fetched via `npx` (never via `openclaw plugins install`).
 
-The installer's `installPlugin()` step internally runs `openclaw plugins install @folotoy/folotoy-openclaw-plugin@<version>` to register the runtime plugin.
+The installer's `installPlugin()` step internally runs `openclaw plugins install @folotoy/folotoy-openclaw-core@<version>` to register the runtime channel plugin.
 
 ## Presets
 
