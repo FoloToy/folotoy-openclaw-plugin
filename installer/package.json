@@ -1,6 +1,6 @@
 {
   "name": "@folotoy/folotoy-openclaw-installer",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Interactive installer + preset CLI for the FoloToy OpenClaw plugin.",
   "keywords": [
     "folotoy",
