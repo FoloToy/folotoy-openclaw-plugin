@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -23,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Resolve version
@@ -48,21 +49,36 @@ jobs:
             fi
           done
 
-      - run: npm ci
-
-      - run: npm test
-
-      - name: Publish @folotoy/folotoy-openclaw-plugin
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
+      # Installer must be published first because the plugin depends on it.
       - name: Install installer deps
         working-directory: installer
         run: npm install
 
       - name: Publish @folotoy/folotoy-openclaw-installer
         working-directory: installer
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Wait for installer to be available on npm
+        run: |
+          for i in {1..30}; do
+            if npm view "@folotoy/folotoy-openclaw-installer@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
+              echo "installer ${{ steps.ver.outputs.version }} is available"
+              exit 0
+            fi
+            echo "waiting for installer to propagate ($i/30)..."
+            sleep 5
+          done
+          echo "::error::installer ${{ steps.ver.outputs.version }} did not appear on npm after 150s"
+          exit 1
+
+      - name: Install root deps
+        run: npm install
+
+      - run: npm test
+
+      - name: Publish @folotoy/folotoy-openclaw-plugin
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
