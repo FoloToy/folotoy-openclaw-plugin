@@ -1,12 +1,19 @@
 import { execSync } from 'node:child_process'
 import qrcode from 'qrcode-terminal'
-import { DEFAULT_MQTT_HOST, DEFAULT_MQTT_PORT } from '../config.js'
 import { getInstallSpec, getPluginName } from './package-info.js'
 import { loadPreset, listPresets, type Preset } from './preset.js'
 
+// MQTT broker defaults — duplicated here (instead of imported from the
+// runtime package) so the installer is self-contained and can be packaged
+// independently. Keep in sync with @folotoy/folotoy-openclaw-plugin's
+// config.ts if the production broker changes.
+const DEFAULT_MQTT_HOST = process.env.FOLOTOY_MQTT_HOST ?? 'f.folotoy.cn'
+const DEFAULT_MQTT_PORT = 1883
+
 const PAIR_API_BASE = process.env.PAIR_API_BASE ?? 'https://pair.folotoy.cn'
 const POLL_INTERVAL_MS = 3000
-const POLL_TIMEOUT_MS = 300_000 // 5 minutes
+const POLL_TIMEOUT_MS = 300_000 // 5 minutes (matches server SESSION_TTL_SECONDS)
+const MAX_QR_REFRESH_COUNT = 3 // total wait ≤ 5 min × 3 = 15 min
 
 // ── Types ──────────────────────────────────────────────
 
@@ -90,6 +97,46 @@ async function pollSession(sessionId: string): Promise<PollResponse & { status: 
   throw new Error('Pairing timed out after 5 minutes.')
 }
 
+/**
+ * Create a pairing session, display the QR, poll until completion. If the
+ * server marks the session expired or our local timeout fires before the
+ * user finishes scanning, automatically refresh: ask for a new session,
+ * render a new QR, and continue polling. Bounded to MAX_QR_REFRESH_COUNT
+ * attempts so the install command can't hang indefinitely.
+ *
+ * Pattern mirrors openclaw-weixin's login-qr.ts (MAX_QR_REFRESH_COUNT=3),
+ * which is the canonical OpenClaw QR refresh flow.
+ */
+async function pairWithRetry(): Promise<PollResponse & { status: 'completed' }> {
+  for (let attempt = 1; attempt <= MAX_QR_REFRESH_COUNT; attempt++) {
+    const session = await createSession()
+
+    if (attempt === 1) {
+      console.log('Scan this QR code with your phone,')
+      console.log("then scan your toy's QR code on the phone:\n")
+    } else {
+      console.log(
+        `\n🔄 New QR code generated, please scan again (${attempt}/${MAX_QR_REFRESH_COUNT})\n`,
+      )
+    }
+    displayQR(session.pair_url)
+
+    try {
+      return await pollSession(session.session_id)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isExpiry = msg.includes('expired') || msg.includes('timed out')
+      if (!isExpiry || attempt === MAX_QR_REFRESH_COUNT) throw err
+      console.log(
+        `\n⏳ QR code expired, refreshing... (${attempt}/${MAX_QR_REFRESH_COUNT})`,
+      )
+    }
+  }
+  throw new Error(
+    `Pairing timed out: QR code expired ${MAX_QR_REFRESH_COUNT} times. Please re-run the install command.`,
+  )
+}
+
 function restartGateway(): void {
   try {
     execSync('openclaw gateway restart', { stdio: 'inherit' })
@@ -164,17 +211,9 @@ async function main() {
   // Step 2: install plugin if not present
   installPlugin()
 
-  // Step 3: create pairing session
+  // Step 3-5: pair (with auto-refresh if QR expires before scan completes)
   console.log('Creating pairing session...\n')
-  const session = await createSession()
-
-  // Step 4: display QR code
-  console.log('Scan this QR code with your phone,')
-  console.log('then scan your toy\'s QR code on the phone:\n')
-  displayQR(session.pair_url)
-
-  // Step 5: poll for result
-  const result = await pollSession(session.session_id)
+  const result = await pairWithRetry()
 
   // Step 6: write config
   console.log('\nWriting configuration...')

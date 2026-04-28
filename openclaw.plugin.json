@@ -2,51 +2,110 @@
   "id": "folotoy-openclaw-plugin",
   "name": "FoloToy",
   "description": "Empower your FoloToy with OpenClaw AI capabilities.",
-  "version": "0.6.2",
-  "channels": ["folotoy"],
+  "version": "0.7.0",
+  "channels": [
+    "folotoy"
+  ],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {
-      "flow": {
-        "type": "string",
-        "enum": ["direct", "api"],
-        "description": "Authentication flow",
-        "default": "direct"
-      },
-      "toy_sn": {
-        "type": "string",
-        "description": "Toy serial number"
-      },
-      "toy_key": {
-        "type": "string",
-        "description": "Toy key (direct flow)"
-      },
-      "api_url": {
-        "type": "string",
-        "description": "FoloToy API base URL (api flow)"
-      },
-      "api_key": {
-        "type": "string",
-        "description": "FoloToy API key (api flow)"
-      },
-      "mqtt_host": {
-        "type": "string",
-        "description": "MQTT broker host"
-      },
-      "mqtt_port": {
-        "type": "number",
-        "description": "MQTT broker port"
+    "properties": {}
+  },
+  "channelConfigs": {
+    "folotoy": {
+      "label": "FoloToy",
+      "description": "FoloToy smart toy channel — bridges toys to OpenClaw via MQTT.",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "flow": {
+            "default": "direct",
+            "description": "Auth flow",
+            "type": "string",
+            "enum": [
+              "direct",
+              "api"
+            ]
+          },
+          "toy_sn": {
+            "description": "Toy serial number",
+            "type": "string"
+          },
+          "toy_key": {
+            "description": "Toy key (used as MQTT password in direct flow)",
+            "type": "string"
+          },
+          "api_url": {
+            "default": "https://api.folotoy.cn",
+            "description": "FoloToy API base URL (api flow)",
+            "type": "string"
+          },
+          "api_key": {
+            "description": "FoloToy API key (api flow)",
+            "type": "string"
+          },
+          "mqtt_host": {
+            "default": "f.folotoy.cn",
+            "description": "MQTT broker host",
+            "type": "string"
+          },
+          "mqtt_port": {
+            "default": 1883,
+            "description": "MQTT broker port",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "summary_enabled": {
+            "default": true,
+            "description": "Enable reply summarization for over-long replies",
+            "type": "boolean"
+          },
+          "summary_max_chars": {
+            "default": 200,
+            "description": "Character threshold that triggers summarization",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "sentence_split_enabled": {
+            "default": true,
+            "description": "Stream replies sentence-by-sentence for faster TTS",
+            "type": "boolean"
+          },
+          "sentence_split_delimiters": {
+            "default": "！。？；!.?;~",
+            "description": "Punctuation characters that split sentences",
+            "type": "string"
+          },
+          "soothing_loop_enabled": {
+            "default": true,
+            "description": "Repeat soothing replies while waiting for the LLM. Disable to send only the initial order=1 reply.",
+            "type": "boolean"
+          },
+          "soothing_loop_interval_ms": {
+            "default": 8000,
+            "description": "Interval (ms) between soothing replies during the LLM wait",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "flow",
+          "api_url",
+          "mqtt_host",
+          "mqtt_port",
+          "summary_enabled",
+          "summary_max_chars",
+          "sentence_split_enabled",
+          "sentence_split_delimiters",
+          "soothing_loop_enabled",
+          "soothing_loop_interval_ms"
+        ],
+        "additionalProperties": false
       }
     }
-  },
-  "uiHints": {
-    "flow": { "label": "Auth Flow" },
-    "toy_sn": { "label": "Toy SN" },
-    "toy_key": { "label": "Toy Key", "sensitive": true },
-    "api_url": { "label": "API URL", "placeholder": "https://api.folotoy.cn" },
-    "api_key": { "label": "API Key", "sensitive": true },
-    "mqtt_host": { "label": "MQTT Host", "placeholder": "198.19.249.25" },
-    "mqtt_port": { "label": "MQTT Port", "placeholder": "1883" }
   }
 }

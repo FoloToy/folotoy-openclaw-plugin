@@ -4,6 +4,14 @@ Empower your FoloToy with OpenClaw AI capabilities.
 
 An [OpenClaw](https://openclaw.ai) channel plugin that bridges FoloToy smart toys with OpenClaw via MQTT.
 
+> **Two-package layout (since v0.7.0)**: the *runtime* plugin code lives in
+> `@folotoy/folotoy-openclaw-plugin` (this package); the interactive CLI
+> installer is published separately as
+> [`@folotoy/folotoy-openclaw-installer`](./installer/). Splitting them
+> keeps OpenClaw's plugin security scanner from rejecting the runtime
+> package because of `child_process` / `fetch` / `process.env` patterns
+> in the installer code.
+
 ```
 FoloToy Toy  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Plugin  <──>  OpenClaw
 ```
@@ -13,14 +21,14 @@ FoloToy Toy  <──MQTT──>  FoloToy MQTT Broker  <──MQTT──>  Plugin
 Interactive install (scan QR code to pair your toy):
 
 ```bash
-npx @folotoy/folotoy-openclaw-plugin install
+npx @folotoy/folotoy-openclaw-installer install
 ```
 
 To install with a built-in preset (e.g. send only a single soothing reply
 instead of looping until the LLM responds):
 
 ```bash
-npx @folotoy/folotoy-openclaw-plugin install --preset single-soothing
+npx @folotoy/folotoy-openclaw-installer install --preset single-soothing
 ```
 
 Available presets are bundled in `src/presets/*.json`. Currently:
@@ -200,7 +208,7 @@ MQTT connection failures trigger automatic reconnection with exponential backoff
 
 ### Auto-restart Gateway
 
-After interactive installation (`npx @folotoy/folotoy-openclaw-plugin install`), the plugin automatically restarts the OpenClaw gateway so changes take effect immediately.
+After interactive installation (`npx @folotoy/folotoy-openclaw-installer install`), the plugin automatically restarts the OpenClaw gateway so changes take effect immediately.
 
 ## Testing Notifications
 

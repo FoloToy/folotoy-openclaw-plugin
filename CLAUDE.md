@@ -140,7 +140,7 @@ MQTT password: {toy_key}
 #### 安抚回复
 
 - 收到玩具消息后**立即**发送一条安抚语（order=1），这条**无条件发送**，不受 `soothing_loop_enabled` 控制
-- `soothing_loop_enabled=true` 时，在等待 LLM 首个 chunk 期间每隔 `soothing_loop_interval_ms`（默认 3000ms）补发一条安抚语，LLM 一旦开始返回内容立即停止；**没有最大次数限制**
+- `soothing_loop_enabled=true` 时，在等待 LLM 首个 chunk 期间每隔 `soothing_loop_interval_ms`（默认 8000ms）补发一条安抚语，LLM 一旦开始返回内容立即停止；**没有最大次数限制**
 - `soothing_loop_enabled=false` 时只发那条 order=1 的安抚语，等待期不再补发
 - 同一消息内安抚语不重复（shuffle 后顺序选取，用完才 reshuffle）
 - 安抚语根据用户输入意图匹配（如难过、故事、笑话等），无匹配时使用默认候选
@@ -276,7 +276,7 @@ sentence:
 # 循环安抚语（仅控制等待 LLM 期间的补发；初始那条 order=1 安抚语始终发送）
 soothing:
   soothing_loop_enabled: true          # 是否启用循环安抚语（默认 true）
-  soothing_loop_interval_ms: 3000      # 等待期补发间隔，毫秒（默认 3000）
+  soothing_loop_interval_ms: 8000      # 等待期补发间隔，毫秒（默认 8000）
 ```
 
 ## Environments
