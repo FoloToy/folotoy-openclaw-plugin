@@ -85,7 +85,7 @@
             "type": "boolean"
           },
           "soothing_loop_interval_ms": {
-            "default": 3000,
+            "default": 8000,
             "description": "Interval (ms) between soothing replies during the LLM wait",
             "type": "integer",
             "minimum": -9007199254740991,
