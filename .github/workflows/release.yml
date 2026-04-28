@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.8.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Resolve version
+        id: ver
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify package.json versions match tag
+        run: |
+          ROOT=$(node -p "require('./package.json').version")
+          INST=$(node -p "require('./installer/package.json').version")
+          MANIFEST=$(node -p "require('./openclaw.plugin.json').version")
+          EXPECTED="${{ steps.ver.outputs.version }}"
+          for name in ROOT INST MANIFEST; do
+            actual="${!name}"
+            if [ "$actual" != "$EXPECTED" ]; then
+              echo "::error::$name version $actual does not match tag $EXPECTED"
+              exit 1
+            fi
+          done
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Publish @folotoy/folotoy-openclaw-plugin
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install installer deps
+        working-directory: installer
+        run: npm install
+
+      - name: Publish @folotoy/folotoy-openclaw-installer
+        working-directory: installer
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          generate_release_notes: true
